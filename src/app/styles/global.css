@@ -1,0 +1,57 @@
+@import '@mantine/core/styles.css';
+
+:root {
+  --onchak-accent: #0f766e;
+  --onchak-accent-soft: rgba(15, 118, 110, 0.12);
+  --onchak-grid: rgba(15, 23, 42, 0.08);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--mantine-color-text);
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 38%),
+    radial-gradient(circle at top right, rgba(21, 94, 117, 0.12), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+html[data-mantine-color-scheme='dark'] body {
+  background:
+    radial-gradient(circle at top left, rgba(13, 148, 136, 0.24), transparent 36%),
+    radial-gradient(circle at top right, rgba(14, 116, 144, 0.18), transparent 30%),
+    linear-gradient(180deg, #0b1120 0%, #111827 100%);
+}
+
+body.extension-page--popup {
+  width: 390px;
+  min-height: 560px;
+  overflow-x: hidden;
+}
+
+body.extension-page--options {
+  min-height: 100vh;
+}
+
+.onchak-shell {
+  position: relative;
+}
+
+.onchak-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--onchak-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--onchak-grid) 1px, transparent 1px);
+  background-size: 18px 18px;
+  opacity: 0.2;
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), transparent 90%);
+}
+
