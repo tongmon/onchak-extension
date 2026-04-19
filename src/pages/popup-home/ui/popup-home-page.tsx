@@ -1,205 +1,188 @@
-import type { ReactElement } from 'react';
+import { useEffect, useState, useTransition, type ReactElement } from "react";
 import {
   Alert,
-  Badge,
+  Anchor,
+  Avatar,
+  Box,
   Button,
-  Code,
-  Group,
-  Loader,
+  NumberInput,
   Paper,
   Stack,
-  Text,
-} from '@mantine/core';
-import { useAuthStateQuery, useLogoutMutation } from '@/entities/auth';
-import { TogglePageOverlayCard } from '@/features/toggle-page-overlay';
-import { ExtensionShell } from '@/shared/ui/extension-shell';
-import { useExtensionContextQuery } from '../api/get-extension-context-query';
+  TextInput,
+  Title,
+} from "@mantine/core";
+import { useForm } from "@mantine/form";
+import { useExtensionSettingsStore } from "@/entities/settings";
+import MainLogo from "@/assets/images/logos/MainLogo.png";
+import { useLogoutMutation } from "@/entities/auth";
 
-function ContextValue({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}): ReactElement {
-  return (
-    <Stack gap={2}>
-      <Text c="dimmed" size="xs" tt="uppercase">
-        {label}
-      </Text>
-      <Text fw={600} size="sm">
-        {value}
-      </Text>
-    </Stack>
-  );
+interface PopupFormValues {
+  coupangProductUrl: string;
+  product1688Url: string;
+  salesCommission: string;
+  inboundOutboundShippingFee: string;
+}
+
+function createInitialValues(values: PopupFormValues): PopupFormValues {
+  return {
+    coupangProductUrl: values.coupangProductUrl,
+    product1688Url: values.product1688Url,
+    salesCommission: values.salesCommission,
+    inboundOutboundShippingFee: values.inboundOutboundShippingFee,
+  };
 }
 
 export function PopupHomePage(): ReactElement {
-  const authStateQuery = useAuthStateQuery();
+  const settings = useExtensionSettingsStore((state) => state.settings);
+  const updateSettings = useExtensionSettingsStore((state) => state.update);
   const logoutMutation = useLogoutMutation();
-  const extensionContextQuery = useExtensionContextQuery();
-  const session = authStateQuery.data?.session;
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  const form = useForm<PopupFormValues>({
+    mode: "uncontrolled",
+    initialValues: createInitialValues({
+      coupangProductUrl: settings.coupangProductUrl,
+      product1688Url: settings.product1688Url,
+      salesCommission: settings.salesCommission,
+      inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
+    }),
+    onValuesChange: () => {
+      setHasChanges(form.isDirty());
+    },
+  });
+
+  useEffect(() => {
+    const nextValues = createInitialValues({
+      coupangProductUrl: settings.coupangProductUrl,
+      product1688Url: settings.product1688Url,
+      salesCommission: settings.salesCommission,
+      inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
+    });
+
+    form.setInitialValues(nextValues);
+    form.setValues(nextValues);
+    form.resetDirty();
+    setHasChanges(false);
+  }, [
+    settings.coupangProductUrl,
+    settings.product1688Url,
+    settings.salesCommission,
+    settings.inboundOutboundShippingFee,
+  ]);
+
+  const handleSubmit = form.onSubmit((values) => {
+    startTransition(async () => {
+      const trimmedValues = createInitialValues({
+        coupangProductUrl: values.coupangProductUrl.trim(),
+        product1688Url: values.product1688Url.trim(),
+        salesCommission: values.salesCommission.trim(),
+        inboundOutboundShippingFee: values.inboundOutboundShippingFee.trim(),
+      });
+
+      try {
+        setErrorMessage(null);
+        await updateSettings(trimmedValues);
+        form.setInitialValues(trimmedValues);
+        form.setValues(trimmedValues);
+        form.resetDirty();
+        setHasChanges(false);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "입력값을 저장하지 못했습니다.",
+        );
+      }
+    });
+  });
 
   return (
-    <ExtensionShell
-      actions={
-        <Group gap="xs">
-          <Badge color="teal" radius="xl" variant="light">
-            {session?.user.displayName ?? 'Signed in'}
-          </Badge>
-          <Badge color="teal" radius="xl" variant="light">
-            MV3
-          </Badge>
-          <Badge color="blue" radius="xl" variant="dot">
-            React 19
-          </Badge>
-          <Button
-            loading={logoutMutation.isPending}
-            onClick={() => {
-              void logoutMutation.mutateAsync();
-            }}
-            radius="xl"
-            size="xs"
-            variant="default"
-          >
-            Sign out
-          </Button>
-        </Group>
-      }
-      description="Popup surfaces stay focused on quick actions while background and content work continue in separate extension contexts."
-      eyebrow="Popup"
-      surface="popup"
-      title="Onchak Extension"
-    >
-      <Paper p="lg" radius="xl" shadow="sm" withBorder>
-        <Stack gap="md">
-          {session ? (
-            <Alert color="teal" radius="lg" title="Authenticated session">
-              Signed in as {session.user.email} via {session.mode} mode.
-            </Alert>
-          ) : null}
-
-          <Group justify="space-between">
-            <Stack gap={4}>
-              <Text fw={700}>Extension context</Text>
-              <Text c="dimmed" size="sm">
-                Loaded through a typed popup to background to content bridge.
-              </Text>
-            </Stack>
-
-            <Button
-              loading={extensionContextQuery.isFetching}
-              onClick={() => {
-                void extensionContextQuery.refetch();
-              }}
-              radius="xl"
-              size="xs"
-              variant="light"
-            >
-              Refresh
-            </Button>
-          </Group>
-
-          {extensionContextQuery.isPending ? (
-            <Group justify="center" py="lg">
-              <Loader color="teal" size="sm" />
-            </Group>
-          ) : null}
-
-          {extensionContextQuery.isError ? (
-            <Alert color="red" radius="lg" title="Bridge request failed">
-              {extensionContextQuery.error.message}
-            </Alert>
-          ) : null}
-
-          {extensionContextQuery.data ? (
-            <Stack gap="md">
-              <Group grow>
-                <ContextValue
-                  label="Version"
-                  value={extensionContextQuery.data.extensionVersion}
-                />
-                <ContextValue
-                  label="Storage"
-                  value={extensionContextQuery.data.storageArea}
-                />
-              </Group>
-
-              <ContextValue
-                label="Handled at"
-                value={new Date(
-                  extensionContextQuery.data.handledAt,
-                ).toLocaleTimeString()}
-              />
-
-              <Stack gap={6}>
-                <Text c="dimmed" size="xs" tt="uppercase">
-                  Active tab
-                </Text>
-                <Text fw={600}>
-                  {extensionContextQuery.data.activeTab.pageTitle ??
-                    'No supported web page'}
-                </Text>
-                <Code block>
-                  {extensionContextQuery.data.activeTab.tabUrl ?? 'n/a'}
-                </Code>
-                <Group gap="xs">
-                  <Badge
-                    color={
-                      extensionContextQuery.data.activeTab.contentScriptConnected
-                        ? 'teal'
-                        : 'gray'
-                    }
-                    radius="xl"
-                    variant="light"
-                  >
-                    {extensionContextQuery.data.activeTab.contentScriptConnected
-                      ? 'Content connected'
-                      : 'No content bridge'}
-                  </Badge>
-                  <Badge
-                    color={
-                      extensionContextQuery.data.activeTab.overlayEnabled
-                        ? 'blue'
-                        : 'gray'
-                    }
-                    radius="xl"
-                    variant="light"
-                  >
-                    {extensionContextQuery.data.activeTab.overlayEnabled
-                      ? 'Overlay active'
-                      : 'Overlay idle'}
-                  </Badge>
-                </Group>
-              </Stack>
-
-              {!extensionContextQuery.data.activeTab.contentScriptConnected ? (
-                <Alert
-                  color="yellow"
-                  radius="lg"
-                  title="Content scripts are scoped"
-                >
-                  This starter content script only runs on matched HTTP and
-                  HTTPS pages, not Chrome internal pages.
-                </Alert>
-              ) : null}
-            </Stack>
-          ) : null}
-        </Stack>
-      </Paper>
-
-      <TogglePageOverlayCard />
-
-      <Button
-        fullWidth
-        onClick={() => {
-          void chrome.runtime.openOptionsPage();
-        }}
-        radius="xl"
-        variant="default"
+    <Box mih="100dvh" px="md" py="md">
+      <Stack
+        gap="0"
+        justify="center"
+        align="center"
+        mih="calc(100dvh - var(--mantine-spacing-md) * 2)"
       >
-        Open full settings
-      </Button>
-    </ExtensionShell>
+        <Avatar src={MainLogo} size="lg" mb="xs" />
+        <Title order={4}>환영합니다, 이경준님!</Title>
+        <Button
+          variant="subtle"
+          onClick={() => {
+            void logoutMutation.mutateAsync();
+          }}
+          loading={logoutMutation.isPending}
+          size="xs"
+          mt="xs"
+          mb="lg"
+        >
+          로그아웃
+        </Button>
+        <Paper p="lg" radius="xl" shadow="sm" withBorder w="100%">
+          <Stack gap="md">
+            <TextInput
+              key={form.key("coupangProductUrl")}
+              autoComplete="off"
+              disabled={isPending}
+              label="쿠팡 상품 URL"
+              placeholder="https://www.coupang.com/..."
+              radius="md"
+              type="url"
+              {...form.getInputProps("coupangProductUrl")}
+            />
+
+            <TextInput
+              key={form.key("product1688Url")}
+              autoComplete="off"
+              disabled={isPending}
+              label="1688 상품 URL"
+              placeholder="https://detail.1688.com/..."
+              radius="md"
+              type="url"
+              {...form.getInputProps("product1688Url")}
+            />
+
+            <NumberInput
+              key={form.key("salesCommission")}
+              autoComplete="off"
+              disabled={isPending}
+              label="판매 수수료"
+              placeholder="수수료 12.5%"
+              radius="md"
+              suffix="%"
+              {...form.getInputProps("salesCommission")}
+            />
+
+            <NumberInput
+              key={form.key("inboundOutboundShippingFee")}
+              autoComplete="off"
+              disabled={isPending}
+              label="입출고 배송비"
+              placeholder="배송비 8000"
+              radius="md"
+              suffix="₩"
+              {...form.getInputProps("inboundOutboundShippingFee")}
+            />
+
+            {errorMessage ? (
+              <Alert color="red" radius="lg" title="Apply failed">
+                {errorMessage}
+              </Alert>
+            ) : null}
+          </Stack>
+        </Paper>
+        <Button
+          disabled={!hasChanges}
+          loading={isPending}
+          radius="md"
+          onClick={() => handleSubmit}
+          mt="lg"
+        >
+          마진률 계산
+        </Button>
+      </Stack>
+    </Box>
   );
 }

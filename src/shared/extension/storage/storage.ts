@@ -19,7 +19,12 @@ async function ensureDefaults(): Promise<void> {
   if (
     current.settings === undefined ||
     current.settings?.colorScheme !== nextSettings.colorScheme ||
-    current.settings?.pageOverlayEnabled !== nextSettings.pageOverlayEnabled
+    current.settings?.pageOverlayEnabled !== nextSettings.pageOverlayEnabled ||
+    current.settings?.coupangProductUrl !== nextSettings.coupangProductUrl ||
+    current.settings?.product1688Url !== nextSettings.product1688Url ||
+    current.settings?.salesCommission !== nextSettings.salesCommission ||
+    current.settings?.inboundOutboundShippingFee !==
+      nextSettings.inboundOutboundShippingFee
   ) {
     await storageArea.set({ settings: nextSettings });
   }
