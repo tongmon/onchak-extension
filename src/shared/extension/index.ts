@@ -7,6 +7,8 @@ export {
   type MessageFailure,
   type MessageResult,
   type MessageSuccess,
+  type PopularItemSnapshot,
+  type PopularSearchSnapshot,
   type RuntimeMessage,
   type RuntimeMessageMap,
   type RuntimeMessageType,
@@ -24,4 +26,3 @@ export {
   type ExtensionStorageSchema,
 } from './storage/schema';
 export { extensionStorage } from './storage/storage';
-

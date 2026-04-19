@@ -16,10 +16,33 @@ export interface ExtensionContext {
   activeTab: ActiveTabSnapshot;
 }
 
+export interface PopularItemSnapshot {
+  imgUrl: string;
+  name: string;
+  category: string;
+  brand: string;
+  manufacturer: string;
+  rating: number;
+  review: number;
+  cost: number;
+  views: [number, number];
+}
+
+export interface PopularSearchSnapshot {
+  searchKeyword: string;
+  averageCost: number;
+  costRange: [number, number];
+  popularItems: PopularItemSnapshot[];
+}
+
 export interface RuntimeMessageMap {
   'system/get-extension-context': {
     request: undefined;
     response: ExtensionContext;
+  };
+  'page/get-active-tab-popular-search-data': {
+    request: undefined;
+    response: PopularSearchSnapshot;
   };
   'page/set-active-tab-overlay': {
     request: { enabled: boolean };
@@ -39,6 +62,10 @@ export interface TabMessageMap {
       href: string;
       overlayEnabled: boolean;
     };
+  };
+  'page/get-popular-search-data': {
+    request: undefined;
+    response: PopularSearchSnapshot;
   };
   'page/set-overlay': {
     request: { enabled: boolean };
@@ -89,4 +116,3 @@ export function messageFailure(error: unknown): MessageFailure {
 }
 
 export type { ExtensionSettings };
-

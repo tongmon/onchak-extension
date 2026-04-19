@@ -1,29 +1,65 @@
-import { useEffect, useState, useTransition, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import {
   Alert,
-  Anchor,
-  Avatar,
-  Box,
+  Badge,
   Button,
+  Code,
+  Group,
   NumberInput,
   Paper,
   Stack,
+  Text,
   TextInput,
-  Title,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
+import {
+  defaultAuthConfig,
+  useAuthStateQuery,
+  useLogoutMutation,
+} from "@/entities/auth";
 import { useExtensionSettingsStore } from "@/entities/settings";
-import MainLogo from "@/assets/images/logos/MainLogo.png";
-import { useLogoutMutation } from "@/entities/auth";
+import {
+  sendRuntimeMessage,
+  type PopularSearchSnapshot,
+} from "@/shared/extension";
+import { ExtensionShell } from "@/shared/ui/extension-shell";
+import {
+  useRequestMarginCalculationMutation,
+  type MarginCalculationResponse,
+} from "../api/request-margin-calculation-mutation";
 
 interface PopupFormValues {
   coupangProductUrl: string;
   product1688Url: string;
-  salesCommission: string;
-  inboundOutboundShippingFee: string;
+  salesCommission: string | number;
+  inboundOutboundShippingFee: string | number;
 }
 
-function createInitialValues(values: PopupFormValues): PopupFormValues {
+interface FeedbackState {
+  color: "red" | "yellow";
+  title: string;
+  message: string;
+}
+
+const DEBUG_POPUP_HOME = true;
+
+function logPopupHomeDebug(
+  stage: string,
+  details: Record<string, unknown>,
+): void {
+  if (!DEBUG_POPUP_HOME) {
+    return;
+  }
+
+  console.info(`[Onchak][popup-home][${stage}]`, details);
+}
+
+function createInitialValues(values: {
+  coupangProductUrl: string;
+  product1688Url: string;
+  salesCommission: string;
+  inboundOutboundShippingFee: string;
+}): PopupFormValues {
   return {
     coupangProductUrl: values.coupangProductUrl,
     product1688Url: values.product1688Url,
@@ -32,13 +68,95 @@ function createInitialValues(values: PopupFormValues): PopupFormValues {
   };
 }
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeNumberInput(value: string | number): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(trimmedValue.replace(/,/g, ""));
+
+  return Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : null;
+}
+
+function stringifyFieldValue(value: string | number): string {
+  return typeof value === "number" ? String(value) : value.trim();
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("ko-KR").format(value);
+}
+
+function formatRange(range: [number, number], suffix = ""): string {
+  return `${formatCurrency(range[0])} - ${formatCurrency(range[1])}${suffix}`;
+}
+
+function getFeedbackState(error: unknown): FeedbackState {
+  const message =
+    error instanceof Error
+      ? error.message
+      : "마진률 계산 요청을 처리하지 못했습니다.";
+
+  if (
+    message ===
+    "인기상품 검색 결과 페이지가 아닙니다. 해당 화면에서 다시 시도해주세요."
+  ) {
+    return {
+      color: "yellow",
+      title: "페이지 확인 필요",
+      message,
+    };
+  }
+
+  if (message === "특정 정보를 찾을 수 없습니다.") {
+    return {
+      color: "yellow",
+      title: "파싱 경고",
+      message,
+    };
+  }
+
+  return {
+    color: "red",
+    title: "계산 요청 실패",
+    message,
+  };
+}
+
+function getResponsePreview(
+  response: MarginCalculationResponse | undefined,
+): string | null {
+  if (!response) {
+    return null;
+  }
+
+  return JSON.stringify(response, null, 2);
+}
+
 export function PopupHomePage(): ReactElement {
+  const authStateQuery = useAuthStateQuery();
   const settings = useExtensionSettingsStore((state) => state.settings);
   const updateSettings = useExtensionSettingsStore((state) => state.update);
   const logoutMutation = useLogoutMutation();
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const marginCalculationMutation = useRequestMarginCalculationMutation();
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [parsedSnapshot, setParsedSnapshot] =
+    useState<PopularSearchSnapshot | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<PopupFormValues>({
     mode: "uncontrolled",
@@ -48,8 +166,37 @@ export function PopupHomePage(): ReactElement {
       salesCommission: settings.salesCommission,
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
     }),
-    onValuesChange: () => {
-      setHasChanges(form.isDirty());
+    validate: {
+      coupangProductUrl: (value) => {
+        const trimmedValue = value.trim();
+
+        if (!trimmedValue) {
+          return "쿠팡 상품 URL을 입력해주세요.";
+        }
+
+        return isHttpUrl(trimmedValue)
+          ? null
+          : "올바른 쿠팡 상품 URL을 입력해주세요.";
+      },
+      product1688Url: (value) => {
+        const trimmedValue = value.trim();
+
+        if (!trimmedValue) {
+          return "1688 상품 URL을 입력해주세요.";
+        }
+
+        return isHttpUrl(trimmedValue)
+          ? null
+          : "올바른 1688 상품 URL을 입력해주세요.";
+      },
+      salesCommission: (value) =>
+        normalizeNumberInput(value) === null
+          ? "판매 수수료를 입력해주세요."
+          : null,
+      inboundOutboundShippingFee: (value) =>
+        normalizeNumberInput(value) === null
+          ? "입출고 배송비를 입력해주세요."
+          : null,
     },
   });
 
@@ -64,7 +211,6 @@ export function PopupHomePage(): ReactElement {
     form.setInitialValues(nextValues);
     form.setValues(nextValues);
     form.resetDirty();
-    setHasChanges(false);
   }, [
     settings.coupangProductUrl,
     settings.product1688Url,
@@ -72,117 +218,219 @@ export function PopupHomePage(): ReactElement {
     settings.inboundOutboundShippingFee,
   ]);
 
-  const handleSubmit = form.onSubmit((values) => {
-    startTransition(async () => {
-      const trimmedValues = createInitialValues({
-        coupangProductUrl: values.coupangProductUrl.trim(),
-        product1688Url: values.product1688Url.trim(),
-        salesCommission: values.salesCommission.trim(),
-        inboundOutboundShippingFee: values.inboundOutboundShippingFee.trim(),
+  const handleCalculate = form.onSubmit(async (values) => {
+    logPopupHomeDebug("calculate-clicked", {
+      values,
+    });
+
+    const salesCommission = normalizeNumberInput(values.salesCommission);
+    const inboundOutboundShippingFee = normalizeNumberInput(
+      values.inboundOutboundShippingFee,
+    );
+
+    if (salesCommission === null || inboundOutboundShippingFee === null) {
+      setFeedback({
+        color: "red",
+        title: "입력 오류",
+        message: "숫자 입력값을 다시 확인해주세요.",
+      });
+      return;
+    }
+
+    const normalizedValues = {
+      coupangProductUrl: values.coupangProductUrl.trim(),
+      product1688Url: values.product1688Url.trim(),
+      salesCommission: stringifyFieldValue(values.salesCommission),
+      inboundOutboundShippingFee: stringifyFieldValue(
+        values.inboundOutboundShippingFee,
+      ),
+    };
+
+    setIsSubmitting(true);
+    setFeedback(null);
+    setParsedSnapshot(null);
+    marginCalculationMutation.reset();
+
+    try {
+      await updateSettings(normalizedValues);
+      form.setInitialValues(normalizedValues);
+      form.setValues(normalizedValues);
+      form.resetDirty();
+
+      const activeTabSnapshot = await sendRuntimeMessage({
+        type: "page/get-active-tab-popular-search-data",
       });
 
-      try {
-        setErrorMessage(null);
-        await updateSettings(trimmedValues);
-        form.setInitialValues(trimmedValues);
-        form.setValues(trimmedValues);
-        form.resetDirty();
-        setHasChanges(false);
-      } catch (error) {
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "입력값을 저장하지 못했습니다.",
-        );
-      }
-    });
+      logPopupHomeDebug("active-tab-snapshot", {
+        searchKeyword: activeTabSnapshot.searchKeyword,
+        popularItemsCount: activeTabSnapshot.popularItems.length,
+      });
+
+      setParsedSnapshot(activeTabSnapshot);
+
+      await marginCalculationMutation.mutateAsync({
+        authConfig: authStateQuery.data?.config ?? defaultAuthConfig,
+        authSession: authStateQuery.data?.session ?? null,
+        payload: {
+          coupangUrl: normalizedValues.coupangProductUrl,
+          "1688Url": normalizedValues.product1688Url,
+          salesCommission,
+          inboundOutboundShippingFee,
+          ...activeTabSnapshot,
+        },
+      });
+    } catch (error) {
+      logPopupHomeDebug("calculate-failed", {
+        errorMessage:
+          error instanceof Error ? error.message : "Unknown popup-home error.",
+      });
+      setFeedback(getFeedbackState(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   });
 
+  const responsePreview = getResponsePreview(marginCalculationMutation.data);
+  const session = authStateQuery.data?.session;
+
   return (
-    <Box mih="100dvh" px="md" py="md">
-      <Stack
-        gap="0"
-        justify="center"
-        align="center"
-        mih="calc(100dvh - var(--mantine-spacing-md) * 2)"
-      >
-        <Avatar src={MainLogo} size="lg" mb="xs" />
-        <Title order={4}>환영합니다, 이경준님!</Title>
-        <Button
-          variant="subtle"
-          onClick={() => {
-            void logoutMutation.mutateAsync();
-          }}
-          loading={logoutMutation.isPending}
-          size="xs"
-          mt="xs"
-          mb="lg"
-        >
-          로그아웃
-        </Button>
-        <Paper p="lg" radius="xl" shadow="sm" withBorder w="100%">
-          <Stack gap="md">
-            <TextInput
-              key={form.key("coupangProductUrl")}
-              autoComplete="off"
-              disabled={isPending}
-              label="쿠팡 상품 URL"
-              placeholder="https://www.coupang.com/..."
-              radius="md"
-              type="url"
-              {...form.getInputProps("coupangProductUrl")}
-            />
+    <ExtensionShell
+      actions={
+        <Group gap="xs">
+          <Badge color="teal" radius="xl" variant="light">
+            {session?.user.email ?? "Authenticated"}
+          </Badge>
+          <Button
+            loading={logoutMutation.isPending}
+            onClick={() => {
+              void logoutMutation.mutateAsync();
+            }}
+            radius="xl"
+            size="xs"
+            variant="default"
+          >
+            로그아웃
+          </Button>
+        </Group>
+      }
+      description="입력된 상품 URL과 현재 활성 탭의 인기상품 DOM 데이터를 합쳐 서버로 전송합니다."
+      eyebrow="Popup"
+      surface="popup"
+      title="마진률 계산"
+    >
+      <form onSubmit={handleCalculate}>
+        <Stack gap="lg">
+          <Paper p="lg" radius="xl" shadow="sm" withBorder>
+            <Stack gap="md">
+              <TextInput
+                key={form.key("coupangProductUrl")}
+                autoComplete="off"
+                disabled={isSubmitting}
+                label="쿠팡 상품 URL"
+                placeholder="https://www.coupang.com/..."
+                radius="md"
+                type="url"
+                {...form.getInputProps("coupangProductUrl")}
+              />
 
-            <TextInput
-              key={form.key("product1688Url")}
-              autoComplete="off"
-              disabled={isPending}
-              label="1688 상품 URL"
-              placeholder="https://detail.1688.com/..."
-              radius="md"
-              type="url"
-              {...form.getInputProps("product1688Url")}
-            />
+              <TextInput
+                key={form.key("product1688Url")}
+                autoComplete="off"
+                disabled={isSubmitting}
+                label="1688 상품 URL"
+                placeholder="https://detail.1688.com/..."
+                radius="md"
+                type="url"
+                {...form.getInputProps("product1688Url")}
+              />
 
-            <NumberInput
-              key={form.key("salesCommission")}
-              autoComplete="off"
-              disabled={isPending}
-              label="판매 수수료"
-              placeholder="수수료 12.5%"
-              radius="md"
-              suffix="%"
-              {...form.getInputProps("salesCommission")}
-            />
+              <NumberInput
+                key={form.key("salesCommission")}
+                allowNegative={false}
+                autoComplete="off"
+                decimalScale={2}
+                disabled={isSubmitting}
+                label="판매 수수료"
+                placeholder="예: 11.5"
+                radius="md"
+                suffix="%"
+                thousandSeparator=","
+                {...form.getInputProps("salesCommission")}
+              />
 
-            <NumberInput
-              key={form.key("inboundOutboundShippingFee")}
-              autoComplete="off"
-              disabled={isPending}
-              label="입출고 배송비"
-              placeholder="배송비 8000"
-              radius="md"
-              suffix="₩"
-              {...form.getInputProps("inboundOutboundShippingFee")}
-            />
+              <NumberInput
+                key={form.key("inboundOutboundShippingFee")}
+                allowNegative={false}
+                autoComplete="off"
+                disabled={isSubmitting}
+                label="입출고 배송비"
+                placeholder="예: 1500"
+                radius="md"
+                suffix="원"
+                thousandSeparator=","
+                {...form.getInputProps("inboundOutboundShippingFee")}
+              />
 
-            {errorMessage ? (
-              <Alert color="red" radius="lg" title="Apply failed">
-                {errorMessage}
-              </Alert>
-            ) : null}
-          </Stack>
-        </Paper>
-        <Button
-          disabled={!hasChanges}
-          loading={isPending}
-          radius="md"
-          onClick={() => handleSubmit}
-          mt="lg"
-        >
-          마진률 계산
-        </Button>
-      </Stack>
-    </Box>
+              {feedback ? (
+                <Alert
+                  color={feedback.color}
+                  radius="lg"
+                  title={feedback.title}
+                >
+                  {feedback.message}
+                </Alert>
+              ) : null}
+
+              <Button loading={isSubmitting} radius="md" type="submit">
+                마진률 계산
+              </Button>
+            </Stack>
+          </Paper>
+
+          {parsedSnapshot ? (
+            <Paper p="lg" radius="xl" shadow="sm" withBorder>
+              <Stack gap="xs">
+                <Group justify="space-between">
+                  <Text fw={700}>파싱된 인기상품 정보</Text>
+                  <Badge color="teal" radius="xl" variant="light">
+                    {parsedSnapshot.popularItems.length} items
+                  </Badge>
+                </Group>
+                <Text size="sm">
+                  검색어: <strong>{parsedSnapshot.searchKeyword}</strong>
+                </Text>
+                <Text c="dimmed" size="sm">
+                  평균가 {formatCurrency(parsedSnapshot.averageCost)}원
+                </Text>
+                <Text c="dimmed" size="sm">
+                  가격범위 {formatRange(parsedSnapshot.costRange, "원")}
+                </Text>
+              </Stack>
+            </Paper>
+          ) : null}
+
+          {marginCalculationMutation.data ? (
+            <Paper p="lg" radius="xl" shadow="sm" withBorder>
+              <Stack gap="xs">
+                <Group justify="space-between">
+                  <Text fw={700}>서버 응답</Text>
+                  <Badge color="cyan" radius="xl" variant="light">
+                    excelRate {marginCalculationMutation.data.excelRate}
+                  </Badge>
+                </Group>
+                <Text c="dimmed" size="sm">
+                  excelEx: {marginCalculationMutation.data.excelEx}
+                </Text>
+                <Text c="dimmed" size="sm">
+                  finalResult:{" "}
+                  {marginCalculationMutation.data.finalResult.join(", ")}
+                </Text>
+                {responsePreview ? <Code block>{responsePreview}</Code> : null}
+              </Stack>
+            </Paper>
+          ) : null}
+        </Stack>
+      </form>
+    </ExtensionShell>
   );
 }
