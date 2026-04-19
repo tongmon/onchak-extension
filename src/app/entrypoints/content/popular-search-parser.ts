@@ -326,7 +326,15 @@ function extractLabeledValue(root: ParentNode, label: string): string | null {
 function extractCategory(card: HTMLElement): string | null {
   const container =
     Array.from(card.querySelectorAll<HTMLElement>('div')).find(
-      (element) => element.querySelectorAll('i[title="arrow-right"]').length > 0,
+      (element) => {
+        const directChildren = Array.from(element.children);
+        const hasDirectArrow = directChildren.some(
+          (child) => child.tagName === 'I' && child.getAttribute('title') === 'arrow-right',
+        );
+        const hasDirectSpan = directChildren.some((child) => child.tagName === 'SPAN');
+
+        return hasDirectArrow && hasDirectSpan;
+      },
     ) ?? null;
 
   if (!container) {
@@ -334,16 +342,14 @@ function extractCategory(card: HTMLElement): string | null {
   }
 
   const categoryParts = Array.from(container.children)
-    .filter(
-      (element): element is HTMLSpanElement => element instanceof HTMLSpanElement,
-    )
+    .filter((element) => element.tagName === 'SPAN')
     .map((element) => normalizeText(element.textContent))
     .filter(Boolean);
 
   return categoryParts.length > 0 ? categoryParts.join(' > ') : null;
 }
 
-function createPopularItem(card: HTMLElement): PopularItemSnapshot | null {
+function describePopularItemFields(card: HTMLElement): Record<string, unknown> {
   const imgUrl = card.querySelector<HTMLImageElement>('img[src]')?.src ?? null;
   const name = normalizeText(
     card.querySelector<HTMLElement>('div[class*="_subject_"] span')?.textContent,
@@ -355,6 +361,42 @@ function createPopularItem(card: HTMLElement): PopularItemSnapshot | null {
   const review = parseCommaNumber(extractLabeledValue(card, REVIEW_LABEL) ?? '');
   const cost = parseCommaNumber(extractLabeledValue(card, PRICE_LABEL) ?? '');
   const views = parseViewsRange(extractLabeledValue(card, VIEWS_LABEL) ?? '');
+
+  return {
+    imgUrl,
+    name,
+    category,
+    brand,
+    manufacturer,
+    rating,
+    review,
+    cost,
+    views,
+  };
+}
+
+function inspectPopularItemFields(card: HTMLElement): PopularItemSnapshot | null {
+  const {
+    imgUrl,
+    name,
+    category,
+    brand,
+    manufacturer,
+    rating,
+    review,
+    cost,
+    views,
+  } = describePopularItemFields(card) as {
+    imgUrl: string | null;
+    name: string;
+    category: string | null;
+    brand: string | null;
+    manufacturer: string | null;
+    rating: number | null;
+    review: number | null;
+    cost: number | null;
+    views: [number, number] | null;
+  };
 
   if (
     !imgUrl ||
@@ -381,6 +423,10 @@ function createPopularItem(card: HTMLElement): PopularItemSnapshot | null {
     cost,
     views,
   };
+}
+
+function createPopularItem(card: HTMLElement): PopularItemSnapshot | null {
+  return inspectPopularItemFields(card);
 }
 
 export function extractPopularSearchSnapshot(): PopularSearchSnapshot {
@@ -473,6 +519,8 @@ export function extractPopularSearchSnapshot(): PopularSearchSnapshot {
       productCardCount: productCardElements.length,
       parsedItemCount: popularItems.length,
       nullItemCount: parsedItems.filter((item) => item === null).length,
+      firstProductCardFields:
+        productCardElements[0] ? describePopularItemFields(productCardElements[0]) : null,
       firstProductCardPreview:
         productCardElements[0]?.outerHTML.slice(0, 4000) ?? null,
     });

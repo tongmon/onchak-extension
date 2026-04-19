@@ -268,6 +268,8 @@ export function PopupHomePage(): ReactElement {
 
       setParsedSnapshot(activeTabSnapshot);
 
+      console.log(activeTabSnapshot);
+
       await marginCalculationMutation.mutateAsync({
         authConfig: authStateQuery.data?.config ?? defaultAuthConfig,
         authSession: authStateQuery.data?.session ?? null,
