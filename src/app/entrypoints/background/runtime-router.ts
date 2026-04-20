@@ -12,20 +12,8 @@ import {
   type TabMessageType,
 } from '@/shared/extension';
 
-const DEBUG_RUNTIME_ROUTER = true;
 const CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE =
   '현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.';
-
-function logRuntimeRouterDebug(
-  stage: string,
-  details: Record<string, unknown>,
-): void {
-  if (!DEBUG_RUNTIME_ROUTER) {
-    return;
-  }
-
-  console.info(`[Onchak][runtime-router][${stage}]`, details);
-}
 
 function isMissingReceiverError(error: unknown): boolean {
   const errorMessage =
@@ -51,18 +39,7 @@ function isDevLoaderScriptFile(contentScriptFile: string): boolean {
 async function injectPrimaryContentScript(tabId: number): Promise<void> {
   const contentScriptFile = getPrimaryContentScriptFile();
 
-  logRuntimeRouterDebug('inject-content-script', {
-    tabId,
-    contentScriptFile,
-  });
-
   if (isDevLoaderScriptFile(contentScriptFile)) {
-    logRuntimeRouterDebug('inject-content-script-skipped', {
-      tabId,
-      contentScriptFile,
-      reason: 'dev-loader-script-cannot-be-injected',
-    });
-
     throw new Error(CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE);
   }
 
@@ -71,14 +48,7 @@ async function injectPrimaryContentScript(tabId: number): Promise<void> {
       target: { tabId },
       files: [contentScriptFile],
     });
-  } catch (error) {
-    logRuntimeRouterDebug('inject-content-script-failed', {
-      tabId,
-      contentScriptFile,
-      errorMessage:
-        error instanceof Error ? error.message : 'Unknown executeScript error.',
-    });
-
+  } catch {
     throw new Error(CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE);
   }
 }
@@ -93,11 +63,6 @@ async function sendTabMessageWithRecovery<T extends TabMessageType>(
     if (!isMissingReceiverError(error)) {
       throw error;
     }
-
-    logRuntimeRouterDebug('receiver-missing', {
-      tabId,
-      messageType: message.type,
-    });
 
     await injectPrimaryContentScript(tabId);
 
@@ -166,41 +131,13 @@ async function handleGetActiveTabPopularSearchData(): Promise<
     throw new Error('현재 활성 탭을 찾을 수 없습니다.');
   }
 
-  logRuntimeRouterDebug('popular-search-request', {
-    tabId: activeTab.id,
-    url: activeTab.url ?? null,
-    title: activeTab.title ?? null,
-    status: activeTab.status ?? null,
-  });
-
   try {
     const response = await sendTabMessageWithRecovery(activeTab.id, {
       type: 'page/get-popular-search-data',
     });
 
-    logRuntimeRouterDebug('popular-search-response', {
-      tabId: activeTab.id,
-      searchKeyword: response.searchKeyword,
-      popularItemsCount: response.popularItems.length,
-    });
-
     return response;
   } catch (error) {
-    const latestTabSnapshot = await chrome.tabs.get(activeTab.id).catch(() => null);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown runtime-router error.';
-
-    logRuntimeRouterDebug('popular-search-failed', {
-      tabId: activeTab.id,
-      url: activeTab.url ?? null,
-      title: activeTab.title ?? null,
-      status: activeTab.status ?? null,
-      latestTabUrl: latestTabSnapshot?.url ?? null,
-      latestTabTitle: latestTabSnapshot?.title ?? null,
-      latestTabStatus: latestTabSnapshot?.status ?? null,
-      errorMessage,
-    });
-
     throw error;
   }
 }
@@ -266,10 +203,6 @@ async function handleRuntimeMessage(
 
 export function registerRuntimeMessageListener(): void {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    logRuntimeRouterDebug('runtime-message', {
-      type: (message as RuntimeMessage).type,
-    });
-
     void handleRuntimeMessage(message as RuntimeMessage)
       .then((response) => {
         sendResponse(messageSuccess(response));

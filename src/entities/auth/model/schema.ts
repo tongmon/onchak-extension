@@ -1,4 +1,4 @@
-export type AuthMode = 'mock' | 'remote';
+export type AuthMode = "mock" | "remote";
 
 export interface AuthUser {
   email: string;
@@ -31,10 +31,10 @@ export interface LoginCredentials {
 }
 
 export const defaultAuthConfig: AuthConfig = {
-  mode: 'mock',
-  apiBaseUrl: 'http://localhost:3000',
-  loginPath: '/api/auth/login',
-  csrfPath: '/api/auth/csrf',
+  mode: "mock",
+  apiBaseUrl: "http://localhost:3000",
+  loginPath: "/api/auth/login",
+  csrfPath: "/api/auth/csrf",
 };
 
 function normalizeApiBaseUrl(input?: string | null): string {
@@ -44,7 +44,7 @@ function normalizeApiBaseUrl(input?: string | null): string {
     return defaultAuthConfig.apiBaseUrl;
   }
 
-  return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
 
 function normalizeAuthPath(
@@ -61,11 +61,11 @@ function normalizeAuthPath(
     return trimmed;
   }
 
-  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }
 
 function normalizeAuthMode(input?: AuthMode | null): AuthMode {
-  return input === 'remote' ? 'remote' : 'mock';
+  return input === "remote" ? "remote" : "mock";
 }
 
 function isIsoDateString(value: string): boolean {
@@ -73,10 +73,10 @@ function isIsoDateString(value: string): boolean {
 }
 
 export function deriveDisplayName(email: string): string {
-  const localPart = email.split('@')[0]?.trim();
+  const localPart = email.split("@")[0]?.trim();
 
   if (!localPart) {
-    return 'Onchak User';
+    return "Onchak User";
   }
 
   const words = localPart
@@ -84,7 +84,7 @@ export function deriveDisplayName(email: string): string {
     .filter(Boolean)
     .map((segment) => segment[0].toUpperCase() + segment.slice(1));
 
-  return words.join(' ') || 'Onchak User';
+  return words.join(" ") || "Onchak User";
 }
 
 export function normalizeAuthConfig(
@@ -93,10 +93,7 @@ export function normalizeAuthConfig(
   return {
     mode: normalizeAuthMode(input?.mode),
     apiBaseUrl: normalizeApiBaseUrl(input?.apiBaseUrl),
-    loginPath: normalizeAuthPath(
-      input?.loginPath,
-      defaultAuthConfig.loginPath,
-    ),
+    loginPath: normalizeAuthPath(input?.loginPath, defaultAuthConfig.loginPath),
     csrfPath: normalizeAuthPath(input?.csrfPath, defaultAuthConfig.csrfPath),
   };
 }
@@ -115,8 +112,7 @@ export function normalizeAuthSession(
   return {
     user: {
       email,
-      displayName:
-        input?.user?.displayName?.trim() || deriveDisplayName(email),
+      displayName: input?.user?.displayName?.trim() || deriveDisplayName(email),
     },
     authenticatedAt:
       authenticatedAt && isIsoDateString(authenticatedAt)
@@ -124,6 +120,6 @@ export function normalizeAuthSession(
         : new Date().toISOString(),
     mode: normalizeAuthMode(input?.mode),
     apiBaseUrl: normalizeApiBaseUrl(input?.apiBaseUrl),
-    csrfToken: input?.csrfToken?.trim() ?? '',
+    csrfToken: input?.csrfToken?.trim() ?? "",
   };
 }

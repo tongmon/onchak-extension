@@ -20,41 +20,12 @@ const REVIEW_LABEL = '\uC0C1\uD488\uD3C9';
 const PRICE_LABEL = '\uAC00\uACA9';
 const VIEWS_LABEL = '\uC870\uD68C\uC218';
 const SEARCH_KEYWORD_PARAM = 'keyword';
-const DEBUG_POPULAR_SEARCH_PARSER = true;
 
 interface ParserTarget {
   source: 'top-document' | 'iframe-document';
   document: Document;
   href: string;
-  title: string;
   iframeSrc: string | null;
-}
-
-function logPopularSearchDebug(
-  stage: string,
-  details: Record<string, unknown>,
-): void {
-  if (!DEBUG_POPULAR_SEARCH_PARSER) {
-    return;
-  }
-
-  console.info(`[Onchak][popular-search][${stage}]`, details);
-}
-
-function logOuterHtmlDocument(
-  stage: string,
-  outerHtml: string,
-  source: ParserTarget['source'],
-): void {
-  if (!DEBUG_POPULAR_SEARCH_PARSER) {
-    return;
-  }
-
-  console.groupCollapsed(
-    `[Onchak][popular-search][${stage}] source=${source} outerHTML length=${outerHtml.length}`,
-  );
-  console.info(outerHtml);
-  console.groupEnd();
 }
 
 function normalizeText(value: string | null | undefined): string {
@@ -151,7 +122,6 @@ function getParserTarget(): ParserTarget {
       source: 'top-document',
       document,
       href: window.location.href,
-      title: document.title,
       iframeSrc: null,
     };
   }
@@ -165,7 +135,6 @@ function getParserTarget(): ParserTarget {
         source: 'top-document',
         document,
         href: window.location.href,
-        title: document.title,
         iframeSrc: popularitySearchIframe.src || null,
       };
     }
@@ -174,21 +143,13 @@ function getParserTarget(): ParserTarget {
       source: 'iframe-document',
       document: iframeDocument,
       href: iframeWindow.location.href,
-      title: iframeDocument.title,
       iframeSrc: popularitySearchIframe.src || null,
     };
-  } catch (error) {
-    logPopularSearchDebug('iframe-access-failed', {
-      iframeSrc: popularitySearchIframe.src || null,
-      errorMessage:
-        error instanceof Error ? error.message : 'Unknown iframe access error.',
-    });
-
+  } catch {
     return {
       source: 'top-document',
       document,
       href: window.location.href,
-      title: document.title,
       iframeSrc: popularitySearchIframe.src || null,
     };
   }
@@ -349,7 +310,7 @@ function extractCategory(card: HTMLElement): string | null {
   return categoryParts.length > 0 ? categoryParts.join(' > ') : null;
 }
 
-function describePopularItemFields(card: HTMLElement): Record<string, unknown> {
+function inspectPopularItemFields(card: HTMLElement): PopularItemSnapshot | null {
   const imgUrl = card.querySelector<HTMLImageElement>('img[src]')?.src ?? null;
   const name = normalizeText(
     card.querySelector<HTMLElement>('div[class*="_subject_"] span')?.textContent,
@@ -361,42 +322,6 @@ function describePopularItemFields(card: HTMLElement): Record<string, unknown> {
   const review = parseCommaNumber(extractLabeledValue(card, REVIEW_LABEL) ?? '');
   const cost = parseCommaNumber(extractLabeledValue(card, PRICE_LABEL) ?? '');
   const views = parseViewsRange(extractLabeledValue(card, VIEWS_LABEL) ?? '');
-
-  return {
-    imgUrl,
-    name,
-    category,
-    brand,
-    manufacturer,
-    rating,
-    review,
-    cost,
-    views,
-  };
-}
-
-function inspectPopularItemFields(card: HTMLElement): PopularItemSnapshot | null {
-  const {
-    imgUrl,
-    name,
-    category,
-    brand,
-    manufacturer,
-    rating,
-    review,
-    cost,
-    views,
-  } = describePopularItemFields(card) as {
-    imgUrl: string | null;
-    name: string;
-    category: string | null;
-    brand: string | null;
-    manufacturer: string | null;
-    rating: number | null;
-    review: number | null;
-    cost: number | null;
-    views: [number, number] | null;
-  };
 
   if (
     !imgUrl ||
@@ -430,16 +355,8 @@ function createPopularItem(card: HTMLElement): PopularItemSnapshot | null {
 }
 
 export function extractPopularSearchSnapshot(): PopularSearchSnapshot {
-  const iframeElements = getIframeCandidates(document);
-  const iframeSources = iframeElements.map((element) => ({
-    id: element.id || null,
-    name: element.name || null,
-    src: element.src || null,
-    isLoaded: Boolean(element.contentDocument),
-  }));
   const parserTarget = getParserTarget();
   const rootDocument = parserTarget.document;
-  const rootOuterHtml = rootDocument.documentElement?.outerHTML ?? '';
   const productCardElements = Array.from(
     rootDocument.querySelectorAll<HTMLElement>('div[class*="_product_card_"]'),
   );
@@ -459,44 +376,17 @@ export function extractPopularSearchSnapshot(): PopularSearchSnapshot {
     normalizeText(element.textContent).startsWith(PRICE_RANGE_LABEL),
   ).length;
 
-  logPopularSearchDebug('dom-captured', {
-    source: parserTarget.source,
-    href: parserTarget.href,
-    title: parserTarget.title,
-    iframeSrc: parserTarget.iframeSrc,
-    outerHtmlLength: rootOuterHtml.length,
-    outerHtmlPreview: rootOuterHtml.slice(0, 4000),
-    keywordResultMatchCount,
-    averagePriceTitleMatchCount,
-    priceRangeTitleMatchCount,
-    productCardCount: productCardElements.length,
-    iframeCount: iframeElements.length,
-    iframeSources,
-  });
-
-  logOuterHtmlDocument('dom-captured', rootOuterHtml, parserTarget.source);
-
   if (
     keywordResultMatchCount === 0 &&
     averagePriceTitleMatchCount === 0 &&
     priceRangeTitleMatchCount === 0 &&
     productCardElements.length === 0
   ) {
-    logPopularSearchDebug('wrong-page-detected', {
-      source: parserTarget.source,
-      href: parserTarget.href,
-      title: parserTarget.title,
-      iframeSrc: parserTarget.iframeSrc,
-      iframeCount: iframeElements.length,
-      iframeSources,
-    });
-
     throw new Error(WRONG_PAGE_MESSAGE);
   }
 
   const searchKeyword = extractSearchKeyword(rootDocument, parserTarget);
   const averageCost = extractAverageCost(rootDocument);
-  const costRangeText = extractCostRangeText(rootDocument);
   const costRange = extractCostRange(rootDocument);
   const parsedItems = productCardElements.map((card) => createPopularItem(card));
   const popularItems = parsedItems
@@ -509,34 +399,8 @@ export function extractPopularSearchSnapshot(): PopularSearchSnapshot {
     costRange === null ||
     popularItems.length === 0
   ) {
-    logPopularSearchDebug('parse-failed', {
-      source: parserTarget.source,
-      href: parserTarget.href,
-      searchKeyword,
-      averageCost,
-      costRangeText,
-      costRange,
-      productCardCount: productCardElements.length,
-      parsedItemCount: popularItems.length,
-      nullItemCount: parsedItems.filter((item) => item === null).length,
-      firstProductCardFields:
-        productCardElements[0] ? describePopularItemFields(productCardElements[0]) : null,
-      firstProductCardPreview:
-        productCardElements[0]?.outerHTML.slice(0, 4000) ?? null,
-    });
-
     throw new Error(MISSING_INFO_MESSAGE);
   }
-
-  logPopularSearchDebug('parse-succeeded', {
-    source: parserTarget.source,
-    href: parserTarget.href,
-    searchKeyword,
-    averageCost,
-    costRange,
-    parsedItemCount: popularItems.length,
-    skippedItemCount: parsedItems.filter((item) => item === null).length,
-  });
 
   return {
     searchKeyword,
