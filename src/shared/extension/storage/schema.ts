@@ -1,12 +1,13 @@
-export type ExtensionColorScheme = 'auto' | 'light' | 'dark';
+export type ExtensionColorScheme = "auto" | "light" | "dark";
 
 export interface ExtensionSettings {
   colorScheme: ExtensionColorScheme;
   pageOverlayEnabled: boolean;
-  coupangProductUrl: string;
   product1688Url: string;
   salesCommission: string;
+  coupangProductCost: string;
   inboundOutboundShippingFee: string;
+  overseasShippingFee: string;
 }
 
 export interface ExtensionStorageSchema {
@@ -14,12 +15,13 @@ export interface ExtensionStorageSchema {
 }
 
 export const defaultExtensionSettings: ExtensionSettings = {
-  colorScheme: 'auto',
+  colorScheme: "auto",
   pageOverlayEnabled: true,
-  coupangProductUrl: '',
-  product1688Url: '',
-  salesCommission: '',
-  inboundOutboundShippingFee: '',
+  product1688Url: "",
+  salesCommission: "10.8",
+  coupangProductCost: "",
+  inboundOutboundShippingFee: "",
+  overseasShippingFee: "",
 };
 
 export const defaultExtensionStorage: ExtensionStorageSchema = {
@@ -31,28 +33,33 @@ export function normalizeExtensionSettings(
 ): ExtensionSettings {
   return {
     colorScheme:
-      input?.colorScheme === 'light' || input?.colorScheme === 'dark'
+      input?.colorScheme === "light" || input?.colorScheme === "dark"
         ? input.colorScheme
         : defaultExtensionSettings.colorScheme,
     pageOverlayEnabled:
-      typeof input?.pageOverlayEnabled === 'boolean'
+      typeof input?.pageOverlayEnabled === "boolean"
         ? input.pageOverlayEnabled
         : defaultExtensionSettings.pageOverlayEnabled,
-    coupangProductUrl:
-      typeof input?.coupangProductUrl === 'string'
-        ? input.coupangProductUrl
-        : defaultExtensionSettings.coupangProductUrl,
     product1688Url:
-      typeof input?.product1688Url === 'string'
+      typeof input?.product1688Url === "string"
         ? input.product1688Url
         : defaultExtensionSettings.product1688Url,
     salesCommission:
-      typeof input?.salesCommission === 'string'
+      typeof input?.salesCommission === "string" &&
+      input.salesCommission.trim() !== ""
         ? input.salesCommission
         : defaultExtensionSettings.salesCommission,
+    coupangProductCost:
+      typeof input?.coupangProductCost === "string"
+        ? input.coupangProductCost
+        : defaultExtensionSettings.coupangProductCost,
     inboundOutboundShippingFee:
-      typeof input?.inboundOutboundShippingFee === 'string'
+      typeof input?.inboundOutboundShippingFee === "string"
         ? input.inboundOutboundShippingFee
         : defaultExtensionSettings.inboundOutboundShippingFee,
+    overseasShippingFee:
+      typeof input?.overseasShippingFee === "string"
+        ? input.overseasShippingFee
+        : defaultExtensionSettings.overseasShippingFee,
   };
 }

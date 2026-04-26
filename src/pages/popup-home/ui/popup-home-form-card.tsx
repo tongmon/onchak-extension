@@ -28,17 +28,6 @@ export function PopupHomeFormCard({
       <form onSubmit={onSubmit}>
         <Stack gap="md">
           <TextInput
-            key={form.key("coupangProductUrl")}
-            autoComplete="off"
-            disabled={isSubmitting}
-            label="쿠팡 상품 URL"
-            placeholder="https://www.coupang.com/..."
-            radius="md"
-            type="url"
-            {...form.getInputProps("coupangProductUrl")}
-          />
-
-          <TextInput
             key={form.key("product1688Url")}
             autoComplete="off"
             disabled={isSubmitting}
@@ -56,11 +45,24 @@ export function PopupHomeFormCard({
             decimalScale={2}
             disabled={isSubmitting}
             label="판매 수수료"
-            placeholder="예: 11.5"
+            placeholder="예: 10.8"
             radius="md"
             suffix="%"
             thousandSeparator=","
             {...form.getInputProps("salesCommission")}
+          />
+
+          <NumberInput
+            key={form.key("coupangProductCost")}
+            allowNegative={false}
+            autoComplete="off"
+            disabled={isSubmitting}
+            label="쿠팡 상품 원가"
+            placeholder="예: 12900"
+            radius="md"
+            suffix="원"
+            thousandSeparator=","
+            {...form.getInputProps("coupangProductCost")}
           />
 
           <NumberInput
@@ -76,6 +78,19 @@ export function PopupHomeFormCard({
             {...form.getInputProps("inboundOutboundShippingFee")}
           />
 
+          <NumberInput
+            key={form.key("overseasShippingFee")}
+            allowNegative={false}
+            autoComplete="off"
+            disabled={isSubmitting}
+            label="Overseas shipping fee"
+            placeholder="예: 3500"
+            radius="md"
+            suffix="원"
+            thousandSeparator=","
+            {...form.getInputProps("overseasShippingFee")}
+          />
+
           {feedback ? (
             <Alert color={feedback.color} radius="lg" title={feedback.title}>
               {feedback.message}
@@ -83,7 +98,7 @@ export function PopupHomeFormCard({
           ) : null}
 
           <Button loading={isSubmitting} radius="md" type="submit">
-            계산 하러 가기!
+            계산하러 가기
           </Button>
         </Stack>
       </form>

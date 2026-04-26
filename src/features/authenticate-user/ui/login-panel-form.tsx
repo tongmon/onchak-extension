@@ -1,4 +1,4 @@
-import type { FormEvent, ReactElement } from 'react';
+import type { FormEvent, ReactElement } from "react";
 import {
   Alert,
   Anchor,
@@ -8,9 +8,9 @@ import {
   Stack,
   Switch,
   TextInput,
-} from '@mantine/core';
-import type { UseFormReturnType } from '@mantine/form';
-import type { LoginFormValues } from '../model/login-form';
+} from "@mantine/core";
+import type { UseFormReturnType } from "@mantine/form";
+import type { LoginFormValues } from "../model/login-form";
 
 interface LoginPanelFormProps {
   compact: boolean;
@@ -30,11 +30,17 @@ export function LoginPanelForm({
   onSubmit,
 }: LoginPanelFormProps): ReactElement {
   return (
-    <form onSubmit={onSubmit}>
-      <Paper p={compact ? 'md' : 'xl'} radius="xl" shadow="sm" withBorder>
+    <form onSubmit={onSubmit} style={{ width: "100%" }}>
+      <Paper
+        p={compact ? "md" : "xl"}
+        radius="xl"
+        shadow="sm"
+        w="100%"
+        withBorder
+      >
         <Stack align="center" gap="lg">
           {errorMessage ? (
-            <Alert color="red" radius="lg" title="Login failed">
+            <Alert color="red" radius="lg" title="Login failed" w="100%">
               {errorMessage}
             </Alert>
           ) : null}
@@ -43,20 +49,20 @@ export function LoginPanelForm({
             autoComplete="username"
             label="이메일"
             placeholder="you@example.com"
-            size={compact ? 'sm' : 'md'}
+            size={compact ? "sm" : "md"}
             w="100%"
             withAsterisk
-            {...form.getInputProps('email')}
+            {...form.getInputProps("email")}
           />
 
           <PasswordInput
             autoComplete="current-password"
             label="비밀번호"
             placeholder="password"
-            size={compact ? 'sm' : 'md'}
+            size={compact ? "sm" : "md"}
             w="100%"
             withAsterisk
-            {...form.getInputProps('password')}
+            {...form.getInputProps("password")}
           />
 
           <Anchor size="sm">비밀번호 재설정</Anchor>
@@ -64,12 +70,12 @@ export function LoginPanelForm({
           <Switch
             checked={isMockMode}
             color="teal"
-            description="백엔드가 없어도 기능 흐름을 검증할 수 있도록 기본 활성화되어 있습니다."
-            label="Mock 인증 사용"
+            // description="백엔드가 없이 시작"
+            label="Mock 사용"
             onChange={(event) => {
               form.setFieldValue(
-                'mode',
-                event.currentTarget.checked ? 'mock' : 'remote',
+                "mode",
+                event.currentTarget.checked ? "mock" : "remote",
               );
             }}
             size="md"
@@ -79,7 +85,7 @@ export function LoginPanelForm({
             fullWidth
             loading={isSubmitting}
             radius="xl"
-            size={compact ? 'sm' : 'md'}
+            size={compact ? "sm" : "md"}
             type="submit"
           >
             로그인

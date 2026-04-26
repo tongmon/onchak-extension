@@ -20,11 +20,12 @@ async function ensureDefaults(): Promise<void> {
     current.settings === undefined ||
     current.settings?.colorScheme !== nextSettings.colorScheme ||
     current.settings?.pageOverlayEnabled !== nextSettings.pageOverlayEnabled ||
-    current.settings?.coupangProductUrl !== nextSettings.coupangProductUrl ||
     current.settings?.product1688Url !== nextSettings.product1688Url ||
     current.settings?.salesCommission !== nextSettings.salesCommission ||
+    current.settings?.coupangProductCost !== nextSettings.coupangProductCost ||
     current.settings?.inboundOutboundShippingFee !==
-      nextSettings.inboundOutboundShippingFee
+      nextSettings.inboundOutboundShippingFee ||
+    current.settings?.overseasShippingFee !== nextSettings.overseasShippingFee
   ) {
     await storageArea.set({ settings: nextSettings });
   }

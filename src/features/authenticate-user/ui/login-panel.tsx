@@ -1,17 +1,17 @@
-import { useEffect, type ReactElement } from 'react';
-import { Box, Stack } from '@mantine/core';
-import { useForm } from '@mantine/form';
-import { useLoginMutation, type AuthConfig } from '@/entities/auth';
+import { useEffect, type ReactElement } from "react";
+import { Box, Stack } from "@mantine/core";
+import { useForm } from "@mantine/form";
+import { useLoginMutation, type AuthConfig } from "@/entities/auth";
 import {
   createInitialLoginFormValues,
   type LoginFormValues,
-} from '../model/login-form';
-import { LoginPanelForm } from './login-panel-form';
-import { LoginPanelIntro } from './login-panel-intro';
+} from "../model/login-form";
+import { LoginPanelForm } from "./login-panel-form";
+import { LoginPanelIntro } from "./login-panel-intro";
 
 interface LoginPanelProps {
   authConfig: AuthConfig;
-  surface: 'popup' | 'options';
+  surface: "popup" | "options";
 }
 
 export function LoginPanel({
@@ -20,20 +20,20 @@ export function LoginPanel({
 }: LoginPanelProps): ReactElement {
   const loginMutation = useLoginMutation();
   const form = useForm<LoginFormValues>({
-    mode: 'controlled',
+    mode: "controlled",
     initialValues: createInitialLoginFormValues(authConfig),
     validate: {
       email: (value) =>
-        value.trim().length === 0 ? '이메일을 입력해주세요.' : null,
+        value.trim().length === 0 ? "이메일을 입력해주세요." : null,
       password: (value) =>
-        value.length === 0 ? '비밀번호를 입력해주세요.' : null,
+        value.length === 0 ? "비밀번호를 입력해주세요." : null,
       apiBaseUrl: (value, values) =>
-        values.mode === 'remote' && value.trim().length === 0
-          ? 'Server origin is required'
+        values.mode === "remote" && value.trim().length === 0
+          ? "Server origin is required"
           : null,
       csrfPath: (value, values) =>
-        values.mode === 'remote' && value.trim().length === 0
-          ? 'CSRF endpoint is required'
+        values.mode === "remote" && value.trim().length === 0
+          ? "CSRF endpoint is required"
           : null,
     },
   });
@@ -57,8 +57,8 @@ export function LoginPanel({
     }));
   }, [authConfig.apiBaseUrl, authConfig.csrfPath, authConfig.mode]);
 
-  const compact = surface === 'popup';
-  const isMockMode = form.values.mode === 'mock';
+  const compact = surface === "popup";
+  const isMockMode = form.values.mode === "mock";
 
   const handleSubmit = form.onSubmit(async (values) => {
     try {
@@ -82,15 +82,19 @@ export function LoginPanel({
   return (
     <Box mih="100dvh" px="md" py="md">
       <Stack
-        align="center"
+        align="stretch"
         gap={0}
         mih="calc(100dvh - var(--mantine-spacing-md) * 2)"
       >
-        <LoginPanelIntro />
+        <Stack align="center" gap={0}>
+          <LoginPanelIntro />
+        </Stack>
 
         <LoginPanelForm
           compact={compact}
-          errorMessage={loginMutation.isError ? loginMutation.error.message : null}
+          errorMessage={
+            loginMutation.isError ? loginMutation.error.message : null
+          }
           form={form}
           isMockMode={isMockMode}
           isSubmitting={loginMutation.isPending}

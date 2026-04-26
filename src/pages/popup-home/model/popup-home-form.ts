@@ -1,10 +1,11 @@
 import type { MarginCalculationResponse } from '../api/request-margin-calculation-mutation';
 
 export interface PopupFormValues {
-  coupangProductUrl: string;
   product1688Url: string;
   salesCommission: string | number;
+  coupangProductCost: string | number;
   inboundOutboundShippingFee: string | number;
+  overseasShippingFee: string | number;
 }
 
 export interface FeedbackState {
@@ -18,16 +19,18 @@ const WRONG_PAGE_MESSAGE =
   '인기상품 검색 결과 페이지가 아닙니다. 해당 화면에서 다시 시도해주세요.';
 
 export function createInitialPopupFormValues(values: {
-  coupangProductUrl: string;
   product1688Url: string;
   salesCommission: string;
+  coupangProductCost: string;
   inboundOutboundShippingFee: string;
+  overseasShippingFee: string;
 }): PopupFormValues {
   return {
-    coupangProductUrl: values.coupangProductUrl,
     product1688Url: values.product1688Url,
     salesCommission: values.salesCommission,
+    coupangProductCost: values.coupangProductCost,
     inboundOutboundShippingFee: values.inboundOutboundShippingFee,
+    overseasShippingFee: values.overseasShippingFee,
   };
 }
 

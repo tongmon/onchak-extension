@@ -6,10 +6,11 @@ const MARGIN_CALCULATION_PATH = '/api/margin-calculations';
 
 export interface MarginCalculationRequestPayload
   extends PopularSearchSnapshot {
-  coupangUrl: string;
   '1688Url': string;
   salesCommission: number;
+  coupangProductCost: number;
   inboundOutboundShippingFee: number;
+  overseasShippingFee: number;
 }
 
 export interface MarginCalculationResponse {
