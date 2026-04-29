@@ -16,7 +16,7 @@ export interface ExtensionStorageSchema {
 
 export const defaultExtensionSettings: ExtensionSettings = {
   colorScheme: "auto",
-  pageOverlayEnabled: true,
+  pageOverlayEnabled: false,
   product1688Url: "",
   salesCommission: "10.8",
   coupangProductCost: "",

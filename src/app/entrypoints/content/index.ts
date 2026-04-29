@@ -5,7 +5,11 @@ import {
   type TabMessage,
   type TabMessageMap,
 } from '@/shared/extension';
-import { getDomSnapshot, setOverlayVisibility } from './overlay';
+import {
+  getDomSnapshot,
+  getOverlayEnabled,
+  setOverlayVisibility,
+} from './overlay';
 import { extractPopularSearchSnapshot } from './popular-search-parser';
 
 async function syncOverlayFromStorage(): Promise<void> {
@@ -34,7 +38,7 @@ async function handleTabMessage(
       }
 
       setOverlayVisibility(message.payload.enabled);
-      return { overlayEnabled: message.payload.enabled };
+      return { overlayEnabled: getOverlayEnabled() };
 
     default:
       throw new Error(`Unsupported tab message: ${String(message)}`);

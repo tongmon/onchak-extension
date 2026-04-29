@@ -61,7 +61,7 @@ export function PopupHomeFormCard({
             allowNegative={false}
             autoComplete="off"
             disabled={isSubmitting}
-            label="쿠팡 상품 원가"
+            label="쿠팡 상품 판매가"
             placeholder="예: 12900"
             radius="md"
             suffix="원"
@@ -103,7 +103,7 @@ export function PopupHomeFormCard({
             allowNegative={false}
             autoComplete="off"
             disabled={isSubmitting}
-            label="Overseas shipping fee"
+            label="배송대행지 적용 환율"
             placeholder="예: 3500"
             radius="md"
             suffix="원"

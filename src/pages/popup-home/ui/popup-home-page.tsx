@@ -1,22 +1,24 @@
 import { useEffect, useState, type ReactElement } from "react";
-import { Box, Button, Paper, Stack, Text, Title } from "@mantine/core";
+import { Box, Button, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import {
   defaultAuthConfig,
   useAuthStateQuery,
   useLogoutMutation,
 } from "@/entities/auth";
-import { useExtensionSettingsStore } from "@/entities/settings";
 import {
-  sendRuntimeMessage,
-  type PopularSearchSnapshot,
-} from "@/shared/extension";
-import { ExtensionShell } from "@/shared/ui/extension-shell";
+  defaultExtensionSettings,
+  useExtensionSettingsStore,
+} from "@/entities/settings";
+import { sendRuntimeMessage } from "@/shared/extension";
 import { useRequestMarginCalculationMutation } from "../api/request-margin-calculation-mutation";
+import {
+  createPopupMarginCalculationResult,
+  type PopupMarginCalculationResult,
+} from "../model/popup-margin-result";
 import {
   createInitialPopupFormValues,
   getPopupFeedbackState,
-  getResponsePreview,
   isHttpUrl,
   normalizeNumberInput,
   stringifyFieldValue,
@@ -24,22 +26,7 @@ import {
   type PopupFormValues,
 } from "../model/popup-home-form";
 import { PopupHomeFormCard } from "./popup-home-form-card";
-
-/*
-
-입출고비용 VAT -> 입출고 배송비 / 10
-판매수수료 -> 쿠팡 물품 원가 * 판매 수수료
-판매수수료 VAT -> 판매수수료 / 10
-부가세 -> (판매가 - (판매가 / 1.1)) - (1688 원가 - (1688 원가 / 1.1)) - 입출고비용 VAT - 판매수수료 VAT
-마진 -> 쿠팡 물품 원가 - 1688 원가 - 입출고 배송비 - 입출고비용 VAT - 판매수수료 - 판매수수료 VAT - 부가세
-마진율 -> (마진 / 쿠팡 물품 원가) * 100
-최소 광고 수익률 -> (11000 / 마진율) / 10000
-최근 28일 조회수 -> 15일 물품 합계에서 평균
-평균 가격 -> 12일 물품 가격에서 최대, 최소 거르고 평균
-예상 월 판매량 -> 28일 조회수 * 0.03
-예상 월 마진 -> 쿠팡 물품 원가 * 예상 월 판매량
-
-*/
+import { PopupMarginResultPage } from "./popup-margin-result-page";
 
 export function PopupHomePage(): ReactElement {
   const authStateQuery = useAuthStateQuery();
@@ -48,9 +35,10 @@ export function PopupHomePage(): ReactElement {
   const logoutMutation = useLogoutMutation();
   const marginCalculationMutation = useRequestMarginCalculationMutation();
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
-  const [parsedSnapshot, setParsedSnapshot] =
-    useState<PopularSearchSnapshot | null>(null);
+  const [calculationResult, setCalculationResult] =
+    useState<PopupMarginCalculationResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const form = useForm<PopupFormValues>({
     mode: "uncontrolled",
@@ -163,7 +151,7 @@ export function PopupHomePage(): ReactElement {
 
     setIsSubmitting(true);
     setFeedback(null);
-    setParsedSnapshot(null);
+    setCalculationResult(null);
     marginCalculationMutation.reset();
 
     try {
@@ -175,8 +163,6 @@ export function PopupHomePage(): ReactElement {
       const activeTabSnapshot = await sendRuntimeMessage({
         type: "page/get-active-tab-popular-search-data",
       });
-
-      setParsedSnapshot(activeTabSnapshot);
 
       console.log(
         "payload: " +
@@ -202,6 +188,19 @@ export function PopupHomePage(): ReactElement {
           ...activeTabSnapshot,
         },
       });
+
+      setCalculationResult(
+        createPopupMarginCalculationResult({
+          inputs: {
+            salesCommission,
+            coupangProductCost,
+            inboundOutboundShippingFee,
+            overseasShippingFee,
+          },
+          response: ret,
+          snapshot: activeTabSnapshot,
+        }),
+      );
     } catch (error) {
       setFeedback(getPopupFeedbackState(error));
     } finally {
@@ -209,8 +208,56 @@ export function PopupHomePage(): ReactElement {
     }
   });
 
-  const responsePreview = getResponsePreview(marginCalculationMutation.data);
-  const session = authStateQuery.data?.session;
+  const handleResetForm = async () => {
+    const defaultSavedValues = {
+      product1688Url: defaultExtensionSettings.product1688Url,
+      salesCommission: defaultExtensionSettings.salesCommission,
+      coupangProductCost: defaultExtensionSettings.coupangProductCost,
+      inboundOutboundShippingFee:
+        defaultExtensionSettings.inboundOutboundShippingFee,
+      overseasShippingFee: defaultExtensionSettings.overseasShippingFee,
+    };
+    const defaultFormValues = createInitialPopupFormValues(defaultSavedValues);
+
+    setIsResetting(true);
+    setFeedback(null);
+    setCalculationResult(null);
+    marginCalculationMutation.reset();
+
+    try {
+      await updateSettings(defaultSavedValues);
+      form.setInitialValues(defaultFormValues);
+      form.setValues(defaultFormValues);
+      form.resetDirty();
+    } catch (error) {
+      setFeedback({
+        color: "red",
+        title: "초기화 실패",
+        message:
+          error instanceof Error
+            ? error.message
+            : "입력값을 초기화하지 못했습니다.",
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  if (calculationResult) {
+    return (
+      <PopupMarginResultPage
+        isLoggingOut={logoutMutation.isPending}
+        result={calculationResult}
+        onBack={() => {
+          setCalculationResult(null);
+          marginCalculationMutation.reset();
+        }}
+        onLogout={() => {
+          void logoutMutation.mutateAsync();
+        }}
+      />
+    );
+  }
 
   return (
     <Box mih="100dvh" px="md" py="md">
@@ -233,20 +280,32 @@ export function PopupHomePage(): ReactElement {
               마진율 및 ROAS 계산
             </Title>
             <Text size="sm">계산에 필요한 필수 정보를 입력해주세요.</Text>
-            <Button
-              size="20"
-              fz="xs"
-              w="30%"
-              variant="outline"
-              mt="xs"
-              style={{ alignSelf: "center" }}
-              loading={logoutMutation.isPending}
-              onClick={() => {
-                void logoutMutation.mutateAsync();
-              }}
-            >
-              로그아웃
-            </Button>
+            <Group gap="xs" justify="center" mt="xs">
+              <Button
+                disabled={isSubmitting}
+                fz="xs"
+                loading={isResetting}
+                onClick={() => {
+                  void handleResetForm();
+                }}
+                size="xs"
+                variant="default"
+              >
+                초기화
+              </Button>
+              <Button
+                disabled={isSubmitting || isResetting}
+                fz="xs"
+                loading={logoutMutation.isPending}
+                onClick={() => {
+                  void logoutMutation.mutateAsync();
+                }}
+                size="xs"
+                variant="outline"
+              >
+                로그아웃
+              </Button>
+            </Group>
           </Stack>
         </Paper>
         <PopupHomeFormCard
@@ -255,21 +314,6 @@ export function PopupHomePage(): ReactElement {
           isSubmitting={isSubmitting}
           onSubmit={handleCalculate}
         />
-
-        {
-          // parsedSnapshot ? (
-          // <PopupHomeSnapshotCard snapshot={parsedSnapshot} />
-          // ) : null
-        }
-
-        {
-          // marginCalculationMutation.data ? (
-          // <PopupHomeResponseCard
-          //   response={marginCalculationMutation.data}
-          //   responsePreview={responsePreview}
-          // />
-          // ) : null
-        }
       </Stack>
     </Box>
   );
