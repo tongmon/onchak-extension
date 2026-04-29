@@ -30,8 +30,8 @@ export interface PopularItemSnapshot {
 
 export interface PopularSearchSnapshot {
   searchKeyword: string;
-  averageCost: number;
-  costRange: [number, number];
+  averageCost: number | null;
+  costRange: [number, number] | null;
   popularItems: PopularItemSnapshot[];
 }
 

@@ -1,6 +1,7 @@
 import type { FormEvent, ReactElement } from "react";
 import {
   Alert,
+  Anchor,
   Button,
   NumberInput,
   Paper,
@@ -9,6 +10,9 @@ import {
 } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import type { FeedbackState, PopupFormValues } from "../model/popup-home-form";
+
+const COUPANG_FEE_INFORMATION_URL =
+  "https://wing.coupang.com/tenants/rfm/settlements/fee-information?utm_source=winghome";
 
 interface PopupHomeFormCardProps {
   feedback: FeedbackState | null;
@@ -70,7 +74,23 @@ export function PopupHomeFormCard({
             allowNegative={false}
             autoComplete="off"
             disabled={isSubmitting}
-            label="입출고 배송비"
+            label={
+              <>
+                {"입출고 배송비 ("}
+                <Anchor
+                  href={COUPANG_FEE_INFORMATION_URL}
+                  inherit
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  바로가기
+                </Anchor>
+                {")"}
+              </>
+            }
             placeholder="예: 1500"
             radius="md"
             suffix="원"

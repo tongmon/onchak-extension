@@ -24,9 +24,22 @@ import {
   type PopupFormValues,
 } from "../model/popup-home-form";
 import { PopupHomeFormCard } from "./popup-home-form-card";
-import { PopupHomeHeaderActions } from "./popup-home-header-actions";
-import { PopupHomeResponseCard } from "./popup-home-response-card";
-import { PopupHomeSnapshotCard } from "./popup-home-snapshot-card";
+
+/*
+
+입출고비용 VAT -> 입출고 배송비 / 10
+판매수수료 -> 쿠팡 물품 원가 * 판매 수수료
+판매수수료 VAT -> 판매수수료 / 10
+부가세 -> (판매가 - (판매가 / 1.1)) - (1688 원가 - (1688 원가 / 1.1)) - 입출고비용 VAT - 판매수수료 VAT
+마진 -> 쿠팡 물품 원가 - 1688 원가 - 입출고 배송비 - 입출고비용 VAT - 판매수수료 - 판매수수료 VAT - 부가세
+마진율 -> (마진 / 쿠팡 물품 원가) * 100
+최소 광고 수익률 -> (11000 / 마진율) / 10000
+최근 28일 조회수 -> 15일 물품 합계에서 평균
+평균 가격 -> 12일 물품 가격에서 최대, 최소 거르고 평균
+예상 월 판매량 -> 28일 조회수 * 0.03
+예상 월 마진 -> 쿠팡 물품 원가 * 예상 월 판매량
+
+*/
 
 export function PopupHomePage(): ReactElement {
   const authStateQuery = useAuthStateQuery();
@@ -177,7 +190,7 @@ export function PopupHomePage(): ReactElement {
           }),
       );
 
-      await marginCalculationMutation.mutateAsync({
+      const ret = await marginCalculationMutation.mutateAsync({
         authConfig: authStateQuery.data?.config ?? defaultAuthConfig,
         authSession: authStateQuery.data?.session ?? null,
         payload: {

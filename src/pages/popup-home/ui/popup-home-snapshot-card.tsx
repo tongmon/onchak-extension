@@ -25,11 +25,17 @@ export function PopupHomeSnapshotCard({
         </Text>
 
         <Text c="dimmed" size="sm">
-          평균가 {formatCurrency(snapshot.averageCost)}원
+          평균가{' '}
+          {snapshot.averageCost === null
+            ? '정보 없음'
+            : `${formatCurrency(snapshot.averageCost)}원`}
         </Text>
 
         <Text c="dimmed" size="sm">
-          가격범위 {formatRange(snapshot.costRange, '원')}
+          가격범위{' '}
+          {snapshot.costRange === null
+            ? '정보 없음'
+            : formatRange(snapshot.costRange, '원')}
         </Text>
       </Stack>
     </Paper>

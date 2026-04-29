@@ -393,12 +393,7 @@ export function extractPopularSearchSnapshot(): PopularSearchSnapshot {
     .filter((item): item is PopularItemSnapshot => item !== null)
     .slice(0, MAX_POPULAR_ITEMS);
 
-  if (
-    !searchKeyword ||
-    averageCost === null ||
-    costRange === null ||
-    popularItems.length === 0
-  ) {
+  if (!searchKeyword || popularItems.length === 0) {
     throw new Error(MISSING_INFO_MESSAGE);
   }
 
