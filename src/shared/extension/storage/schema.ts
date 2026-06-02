@@ -3,7 +3,7 @@ export type ExtensionColorScheme = "auto" | "light" | "dark";
 export interface ExtensionSettings {
   colorScheme: ExtensionColorScheme;
   pageOverlayEnabled: boolean;
-  product1688Url: string;
+  productionCost: string;
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
@@ -17,7 +17,7 @@ export interface ExtensionStorageSchema {
 export const defaultExtensionSettings: ExtensionSettings = {
   colorScheme: "auto",
   pageOverlayEnabled: false,
-  product1688Url: "",
+  productionCost: "",
   salesCommission: "10.8",
   coupangProductCost: "",
   inboundOutboundShippingFee: "",
@@ -40,10 +40,10 @@ export function normalizeExtensionSettings(
       typeof input?.pageOverlayEnabled === "boolean"
         ? input.pageOverlayEnabled
         : defaultExtensionSettings.pageOverlayEnabled,
-    product1688Url:
-      typeof input?.product1688Url === "string"
-        ? input.product1688Url
-        : defaultExtensionSettings.product1688Url,
+    productionCost:
+      typeof input?.productionCost === "string"
+        ? input.productionCost
+        : defaultExtensionSettings.productionCost,
     salesCommission:
       typeof input?.salesCommission === "string" &&
       input.salesCommission.trim() !== ""

@@ -67,19 +67,21 @@ export function LoginPanelForm({
 
           <Anchor size="sm">비밀번호 재설정</Anchor>
 
-          <Switch
-            checked={isMockMode}
-            color="teal"
-            // description="백엔드가 없이 시작"
-            label="Mock 사용"
-            onChange={(event) => {
-              form.setFieldValue(
-                "mode",
-                event.currentTarget.checked ? "mock" : "remote",
-              );
-            }}
-            size="md"
-          />
+          {
+            // <Switch
+            //   checked={isMockMode}
+            //   color="teal"
+            //   // description="백엔드가 없이 시작"
+            //   label="Mock 사용"
+            //   onChange={(event) => {
+            //     form.setFieldValue(
+            //       "mode",
+            //       event.currentTarget.checked ? "mock" : "remote",
+            //     );
+            //   }}
+            //   size="md"
+            // />
+          }
 
           <Button
             fullWidth

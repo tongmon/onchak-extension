@@ -6,7 +6,6 @@ import {
   NumberInput,
   Paper,
   Stack,
-  TextInput,
 } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import type { FeedbackState, PopupFormValues } from "../model/popup-home-form";
@@ -31,15 +30,18 @@ export function PopupHomeFormCard({
     <Paper p="lg" radius="xl" shadow="sm" withBorder>
       <form onSubmit={onSubmit}>
         <Stack gap="md">
-          <TextInput
-            key={form.key("product1688Url")}
+          <NumberInput
+            key={form.key("productionCost")}
+            allowNegative={false}
             autoComplete="off"
+            decimalScale={2}
             disabled={isSubmitting}
-            label="1688 상품 URL"
-            placeholder="https://detail.1688.com/..."
+            label="1688 상품 판매가"
+            placeholder="예: 100"
             radius="md"
-            type="url"
-            {...form.getInputProps("product1688Url")}
+            suffix="위안"
+            thousandSeparator=","
+            {...form.getInputProps("productionCost")}
           />
 
           <NumberInput

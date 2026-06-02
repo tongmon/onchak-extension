@@ -1,7 +1,5 @@
-import type { MarginCalculationResponse } from '../api/request-margin-calculation-mutation';
-
 export interface PopupFormValues {
-  product1688Url: string;
+  productionCost: string | number;
   salesCommission: string | number;
   coupangProductCost: string | number;
   inboundOutboundShippingFee: string | number;
@@ -19,28 +17,19 @@ const WRONG_PAGE_MESSAGE =
   '인기상품 검색 결과 페이지가 아닙니다. 해당 화면에서 다시 시도해주세요.';
 
 export function createInitialPopupFormValues(values: {
-  product1688Url: string;
+  productionCost: string;
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
   overseasShippingFee: string;
 }): PopupFormValues {
   return {
-    product1688Url: values.product1688Url,
+    productionCost: values.productionCost,
     salesCommission: values.salesCommission,
     coupangProductCost: values.coupangProductCost,
     inboundOutboundShippingFee: values.inboundOutboundShippingFee,
     overseasShippingFee: values.overseasShippingFee,
   };
-}
-
-export function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 export function normalizeNumberInput(value: string | number): number | null {
@@ -75,7 +64,7 @@ export function getPopupFeedbackState(error: unknown): FeedbackState {
   const message =
     error instanceof Error
       ? error.message
-      : '마진률 계산 요청을 처리하지 못했습니다.';
+      : '마진률 계산을 처리하지 못했습니다.';
 
   if (message === WRONG_PAGE_MESSAGE) {
     return {
@@ -95,17 +84,7 @@ export function getPopupFeedbackState(error: unknown): FeedbackState {
 
   return {
     color: 'red',
-    title: '계산 요청 실패',
+    title: '계산 실패',
     message,
   };
-}
-
-export function getResponsePreview(
-  response: MarginCalculationResponse | undefined,
-): string | null {
-  if (!response) {
-    return null;
-  }
-
-  return JSON.stringify(response, null, 2);
 }

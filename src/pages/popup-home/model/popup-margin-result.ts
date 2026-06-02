@@ -2,9 +2,9 @@ import type {
   PopularItemSnapshot,
   PopularSearchSnapshot,
 } from "@/shared/extension";
-import type { MarginCalculationResponse } from "../api/request-margin-calculation-mutation";
 
 export interface PopupMarginCalculationInputs {
+  productionCost: number;
   salesCommission: number;
   coupangProductCost: number;
   inboundOutboundShippingFee: number;
@@ -33,7 +33,6 @@ export interface PopupMarginCalculationResult {
 
 interface CreatePopupMarginCalculationResultParams {
   inputs: PopupMarginCalculationInputs;
-  response: MarginCalculationResponse;
   snapshot: PopularSearchSnapshot;
 }
 
@@ -89,10 +88,9 @@ function divideOrNull(numerator: number, denominator: number): number | null {
 
 export function createPopupMarginCalculationResult({
   inputs,
-  response,
   snapshot,
 }: CreatePopupMarginCalculationResultParams): PopupMarginCalculationResult {
-  const product1688Cost = inputs.overseasShippingFee * response.productionCost;
+  const product1688Cost = inputs.overseasShippingFee * inputs.productionCost;
   const inboundOutboundShippingFeeVat =
     inputs.inboundOutboundShippingFee * 0.1;
   const salesCommissionFee =
@@ -133,7 +131,7 @@ export function createPopupMarginCalculationResult({
     popularItemCount: snapshot.popularItems.length,
     priceSampleCount,
     trimmedPriceSampleCount,
-    productionCost: response.productionCost,
+    productionCost: inputs.productionCost,
     product1688Cost,
     inboundOutboundShippingFeeVat,
     salesCommissionFee,

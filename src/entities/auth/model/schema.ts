@@ -32,7 +32,7 @@ export interface LoginCredentials {
 
 export const defaultAuthConfig: AuthConfig = {
   mode: "mock",
-  apiBaseUrl: "http://localhost:3000",
+  apiBaseUrl: "http://59.16.223.28:3000",
   loginPath: "/api/auth/login",
   csrfPath: "/api/auth/csrf",
 };

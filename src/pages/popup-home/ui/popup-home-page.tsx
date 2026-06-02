@@ -1,17 +1,12 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { Box, Button, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import {
-  defaultAuthConfig,
-  useAuthStateQuery,
-  useLogoutMutation,
-} from "@/entities/auth";
+import { useLogoutMutation } from "@/entities/auth";
 import {
   defaultExtensionSettings,
   useExtensionSettingsStore,
 } from "@/entities/settings";
 import { sendRuntimeMessage } from "@/shared/extension";
-import { useRequestMarginCalculationMutation } from "../api/request-margin-calculation-mutation";
 import {
   createPopupMarginCalculationResult,
   type PopupMarginCalculationResult,
@@ -19,7 +14,6 @@ import {
 import {
   createInitialPopupFormValues,
   getPopupFeedbackState,
-  isHttpUrl,
   normalizeNumberInput,
   stringifyFieldValue,
   type FeedbackState,
@@ -29,11 +23,9 @@ import { PopupHomeFormCard } from "./popup-home-form-card";
 import { PopupMarginResultPage } from "./popup-margin-result-page";
 
 export function PopupHomePage(): ReactElement {
-  const authStateQuery = useAuthStateQuery();
   const settings = useExtensionSettingsStore((state) => state.settings);
   const updateSettings = useExtensionSettingsStore((state) => state.update);
   const logoutMutation = useLogoutMutation();
-  const marginCalculationMutation = useRequestMarginCalculationMutation();
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [calculationResult, setCalculationResult] =
     useState<PopupMarginCalculationResult | null>(null);
@@ -43,24 +35,17 @@ export function PopupHomePage(): ReactElement {
   const form = useForm<PopupFormValues>({
     mode: "uncontrolled",
     initialValues: createInitialPopupFormValues({
-      product1688Url: settings.product1688Url,
+      productionCost: settings.productionCost,
       salesCommission: settings.salesCommission,
       coupangProductCost: settings.coupangProductCost,
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
       overseasShippingFee: settings.overseasShippingFee,
     }),
     validate: {
-      product1688Url: (value) => {
-        const trimmedValue = value.trim();
-
-        if (!trimmedValue) {
-          return "1688 상품 URL을 입력해주세요.";
-        }
-
-        return isHttpUrl(trimmedValue)
-          ? null
-          : "올바른 1688 상품 URL을 입력해주세요.";
-      },
+      productionCost: (value) =>
+        normalizeNumberInput(value) === null
+          ? "1688 상품 판매가를 입력해주세요."
+          : null,
       salesCommission: (value) =>
         normalizeNumberInput(value) === null
           ? "판매 수수료를 입력해주세요."
@@ -82,7 +67,7 @@ export function PopupHomePage(): ReactElement {
 
   useEffect(() => {
     const nextValues = createInitialPopupFormValues({
-      product1688Url: settings.product1688Url,
+      productionCost: settings.productionCost,
       salesCommission: settings.salesCommission,
       coupangProductCost: settings.coupangProductCost,
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
@@ -91,7 +76,8 @@ export function PopupHomePage(): ReactElement {
     const currentValues = form.getValues();
 
     if (
-      currentValues.product1688Url === nextValues.product1688Url &&
+      String(currentValues.productionCost) ===
+        String(nextValues.productionCost) &&
       String(currentValues.salesCommission) ===
         String(nextValues.salesCommission) &&
       String(currentValues.coupangProductCost) ===
@@ -108,7 +94,7 @@ export function PopupHomePage(): ReactElement {
     form.setValues(nextValues);
     form.resetDirty();
   }, [
-    settings.product1688Url,
+    settings.productionCost,
     settings.salesCommission,
     settings.coupangProductCost,
     settings.inboundOutboundShippingFee,
@@ -116,6 +102,7 @@ export function PopupHomePage(): ReactElement {
   ]);
 
   const handleCalculate = form.onSubmit(async (values) => {
+    const productionCost = normalizeNumberInput(values.productionCost);
     const salesCommission = normalizeNumberInput(values.salesCommission);
     const coupangProductCost = normalizeNumberInput(values.coupangProductCost);
     const inboundOutboundShippingFee = normalizeNumberInput(
@@ -126,6 +113,7 @@ export function PopupHomePage(): ReactElement {
     );
 
     if (
+      productionCost === null ||
       salesCommission === null ||
       coupangProductCost === null ||
       inboundOutboundShippingFee === null ||
@@ -140,7 +128,7 @@ export function PopupHomePage(): ReactElement {
     }
 
     const normalizedValues = {
-      product1688Url: values.product1688Url.trim(),
+      productionCost: stringifyFieldValue(values.productionCost),
       salesCommission: stringifyFieldValue(values.salesCommission),
       coupangProductCost: stringifyFieldValue(values.coupangProductCost),
       inboundOutboundShippingFee: stringifyFieldValue(
@@ -152,7 +140,6 @@ export function PopupHomePage(): ReactElement {
     setIsSubmitting(true);
     setFeedback(null);
     setCalculationResult(null);
-    marginCalculationMutation.reset();
 
     try {
       await updateSettings(normalizedValues);
@@ -164,40 +151,15 @@ export function PopupHomePage(): ReactElement {
         type: "page/get-active-tab-popular-search-data",
       });
 
-      console.log(
-        "payload: " +
-          JSON.stringify({
-            "1688Url": normalizedValues.product1688Url,
-            salesCommission,
-            coupangProductCost,
-            inboundOutboundShippingFee,
-            overseasShippingFee,
-            ...activeTabSnapshot,
-          }),
-      );
-
-      const ret = await marginCalculationMutation.mutateAsync({
-        authConfig: authStateQuery.data?.config ?? defaultAuthConfig,
-        authSession: authStateQuery.data?.session ?? null,
-        payload: {
-          "1688Url": normalizedValues.product1688Url,
-          salesCommission,
-          coupangProductCost,
-          inboundOutboundShippingFee,
-          overseasShippingFee,
-          ...activeTabSnapshot,
-        },
-      });
-
       setCalculationResult(
         createPopupMarginCalculationResult({
           inputs: {
+            productionCost,
             salesCommission,
             coupangProductCost,
             inboundOutboundShippingFee,
             overseasShippingFee,
           },
-          response: ret,
           snapshot: activeTabSnapshot,
         }),
       );
@@ -210,7 +172,7 @@ export function PopupHomePage(): ReactElement {
 
   const handleResetForm = async () => {
     const defaultSavedValues = {
-      product1688Url: defaultExtensionSettings.product1688Url,
+      productionCost: defaultExtensionSettings.productionCost,
       salesCommission: defaultExtensionSettings.salesCommission,
       coupangProductCost: defaultExtensionSettings.coupangProductCost,
       inboundOutboundShippingFee:
@@ -222,7 +184,6 @@ export function PopupHomePage(): ReactElement {
     setIsResetting(true);
     setFeedback(null);
     setCalculationResult(null);
-    marginCalculationMutation.reset();
 
     try {
       await updateSettings(defaultSavedValues);
@@ -250,7 +211,6 @@ export function PopupHomePage(): ReactElement {
         result={calculationResult}
         onBack={() => {
           setCalculationResult(null);
-          marginCalculationMutation.reset();
         }}
         onLogout={() => {
           void logoutMutation.mutateAsync();

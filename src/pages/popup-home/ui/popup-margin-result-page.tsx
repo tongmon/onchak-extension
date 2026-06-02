@@ -1,17 +1,25 @@
-import type { ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
+  Alert,
   Badge,
   Box,
   Button,
   Divider,
   Group,
   Paper,
+  Portal,
   SimpleGrid,
   Stack,
   Text,
   Title,
+  Transition,
 } from "@mantine/core";
+import { IconCircleDashedCheck } from "@tabler/icons-react";
+import { useUploadPopupMarginResultMutation } from "../api/upload-popup-margin-result-mutation";
 import type { PopupMarginCalculationResult } from "../model/popup-margin-result";
+
+const SUCCESS_POPUP_VISIBLE_MS = 1400;
+const SUCCESS_POPUP_FADE_MS = 600;
 
 interface PopupMarginResultPageProps {
   isLoggingOut: boolean;
@@ -88,6 +96,43 @@ export function PopupMarginResultPage({
   onLogout,
   result,
 }: PopupMarginResultPageProps): ReactElement {
+  const uploadResultMutation = useUploadPopupMarginResultMutation();
+  const [hasUploadedResult, setHasUploadedResult] = useState(false);
+  const [isUploadSuccessVisible, setUploadSuccessVisible] = useState(false);
+  const uploadSuccessTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (uploadSuccessTimerRef.current !== null) {
+        window.clearTimeout(uploadSuccessTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleUploadResult = async () => {
+    if (uploadSuccessTimerRef.current !== null) {
+      window.clearTimeout(uploadSuccessTimerRef.current);
+    }
+
+    try {
+      await uploadResultMutation.mutateAsync({ result });
+    } catch {
+      return;
+    }
+
+    setHasUploadedResult(true);
+    setUploadSuccessVisible(true);
+    uploadSuccessTimerRef.current = window.setTimeout(() => {
+      setUploadSuccessVisible(false);
+      uploadSuccessTimerRef.current = null;
+    }, SUCCESS_POPUP_VISIBLE_MS);
+  };
+
+  const handleBack = () => {
+    setHasUploadedResult(false);
+    onBack();
+  };
+
   return (
     <Box mih="100dvh" px="md" py="md">
       <Stack gap="md">
@@ -108,7 +153,7 @@ export function PopupMarginResultPage({
             </Group>
 
             <Group grow preventGrowOverflow={false}>
-              <Button onClick={onBack} radius="md" variant="default">
+              <Button onClick={handleBack} radius="md" variant="default">
                 다시 입력
               </Button>
               <Button
@@ -185,8 +230,69 @@ export function PopupMarginResultPage({
             label="예상 월 마진"
             value={formatWon(result.expectedMonthlyMargin)}
           />
+          {uploadResultMutation.isError ? (
+            <Alert color="red" radius="md" title="업로드 실패">
+              {uploadResultMutation.error.message}
+            </Alert>
+          ) : null}
+          <Button
+            disabled={hasUploadedResult || isLoggingOut}
+            loading={uploadResultMutation.isPending}
+            onClick={() => {
+              void handleUploadResult();
+            }}
+            radius="md"
+          >
+            결과 서버 업로드
+          </Button>
         </SimpleGrid>
       </Stack>
+
+      <Portal>
+        <Transition
+          duration={SUCCESS_POPUP_FADE_MS}
+          mounted={isUploadSuccessVisible}
+          timingFunction="ease"
+          transition="fade"
+        >
+          {(transitionStyle) => (
+            <Box
+              inset={0}
+              pos="fixed"
+              style={{
+                ...transitionStyle,
+                alignItems: "center",
+                display: "flex",
+                justifyContent: "center",
+                pointerEvents: "none",
+                zIndex: 1000,
+              }}
+            >
+              <Paper
+                aria-live="polite"
+                p="lg"
+                radius="md"
+                role="status"
+                shadow="lg"
+                w="min(260px, calc(100vw - 48px))"
+                withBorder
+              >
+                <Stack align="center" gap="xs">
+                  <IconCircleDashedCheck
+                    aria-hidden
+                    color="var(--mantine-color-teal-6)"
+                    size={48}
+                    stroke={1.8}
+                  />
+                  <Text fw={700} size="sm" ta="center">
+                    서버 저장에 성공하였습니다
+                  </Text>
+                </Stack>
+              </Paper>
+            </Box>
+          )}
+        </Transition>
+      </Portal>
     </Box>
   );
 }
