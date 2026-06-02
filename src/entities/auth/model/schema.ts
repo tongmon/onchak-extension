@@ -18,6 +18,8 @@ export interface AuthSession {
   mode: AuthMode;
   apiBaseUrl: string;
   csrfToken: string;
+  accessToken: string;
+  tokenType: string;
 }
 
 export interface AuthState {
@@ -31,8 +33,8 @@ export interface LoginCredentials {
 }
 
 export const defaultAuthConfig: AuthConfig = {
-  mode: "mock",
-  apiBaseUrl: "http://59.16.223.28:3000",
+  mode: "remote",
+  apiBaseUrl: "https://zephlyglobal.com",
   loginPath: "/api/auth/login",
   csrfPath: "/api/auth/csrf",
 };
@@ -121,5 +123,7 @@ export function normalizeAuthSession(
     mode: normalizeAuthMode(input?.mode),
     apiBaseUrl: normalizeApiBaseUrl(input?.apiBaseUrl),
     csrfToken: input?.csrfToken?.trim() ?? "",
+    accessToken: input?.accessToken?.trim() ?? "",
+    tokenType: input?.tokenType?.trim() || "Bearer",
   };
 }

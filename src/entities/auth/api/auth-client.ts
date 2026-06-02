@@ -89,6 +89,21 @@ function extractErrorMessage(
   return firstMessage ?? fallback;
 }
 
+function extractString(
+  payload: Record<string, unknown> | null,
+  keys: string[],
+): string | null {
+  for (const key of keys) {
+    const candidate = payload?.[key] ?? getNestedRecord(payload, "data")?.[key];
+
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function extractCsrfToken(
   payload: Record<string, unknown> | null,
   response: Response,
@@ -193,6 +208,8 @@ async function loginWithMock(
     mode: "mock",
     apiBaseUrl: config.apiBaseUrl,
     csrfToken: createMockToken("mock_csrf"),
+    accessToken: createMockToken("mock_access"),
+    tokenType: "Bearer",
   };
 }
 
@@ -219,9 +236,9 @@ async function loginWithRemote(
       "X-Requested-With": "XMLHttpRequest",
     },
     body: JSON.stringify({
-      email,
+      username: email,
+      userId: email,
       password,
-      csrfToken,
     }),
   });
   const payload = await parseResponseJson(response);
@@ -235,12 +252,21 @@ async function loginWithRemote(
     );
   }
 
+  const accessToken = extractString(payload, ["accessToken"]);
+  const tokenType = extractString(payload, ["tokenType"]) ?? "Bearer";
+
+  if (!accessToken) {
+    throw new Error("Login response did not include an access token.");
+  }
+
   return {
     user: extractUser(payload, email),
     authenticatedAt: new Date().toISOString(),
     mode: "remote",
     apiBaseUrl: config.apiBaseUrl,
     csrfToken,
+    accessToken,
+    tokenType,
   };
 }
 

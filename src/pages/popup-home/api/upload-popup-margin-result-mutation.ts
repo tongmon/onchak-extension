@@ -23,6 +23,9 @@ export interface UploadPopupMarginResultMutationResult {
 const MISSING_LOGIN_SESSION_MESSAGE =
   '\uB85C\uADF8\uC778 \uC138\uC158\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uB85C\uADF8\uC778\uD55C \uB4A4 \uC5C5\uB85C\uB4DC\uD574\uC8FC\uC138\uC694.';
 
+const MISSING_ACCESS_TOKEN_MESSAGE =
+  '\uC778\uC99D \uD1A0\uD070\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uB2E4\uC2DC \uB85C\uADF8\uC778\uD55C \uB4A4 \uC5C5\uB85C\uB4DC\uD574\uC8FC\uC138\uC694.';
+
 function buildUrl(baseUrl: string, path: string): string {
   if (/^https?:\/\//i.test(path)) {
     return path;
@@ -94,6 +97,10 @@ async function uploadPopupMarginResult({
     throw new Error(MISSING_LOGIN_SESSION_MESSAGE);
   }
 
+  if (!session.accessToken) {
+    throw new Error(MISSING_ACCESS_TOKEN_MESSAGE);
+  }
+
   const url = buildUrl(config.apiBaseUrl, popupMarginResultUploadPath);
   const request: UploadPopupMarginResultRequest = {
     capturedAt: new Date().toISOString(),
@@ -106,6 +113,7 @@ async function uploadPopupMarginResult({
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      Authorization: `${session.tokenType || 'Bearer'} ${session.accessToken}`,
       'X-Requested-With': 'XMLHttpRequest',
       ...(session.csrfToken ? { 'X-CSRF-Token': session.csrfToken } : {}),
     },

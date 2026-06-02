@@ -1,4 +1,5 @@
 import {
+  defaultAuthConfig,
   normalizeAuthConfig,
   normalizeAuthSession,
   type AuthConfig,
@@ -7,19 +8,29 @@ import {
 } from './schema';
 
 const storageArea = chrome.storage.local;
+const legacyAuthApiBaseUrl = 'http://59.16.223.28:3000';
+
+function shouldMigrateLegacyConfig(config?: Partial<AuthConfig>): boolean {
+  return config?.apiBaseUrl === legacyAuthApiBaseUrl;
+}
 
 async function ensureDefaults(): Promise<void> {
   const result = (await storageArea.get(['authConfig'])) as {
     authConfig?: Partial<AuthConfig>;
   };
-  const nextConfig = normalizeAuthConfig(result.authConfig);
+  const storedConfig = result.authConfig;
+  const shouldUseDefaultConfig =
+    storedConfig === undefined || shouldMigrateLegacyConfig(storedConfig);
+  const nextConfig = normalizeAuthConfig(
+    shouldUseDefaultConfig ? defaultAuthConfig : storedConfig,
+  );
 
   if (
-    result.authConfig === undefined ||
-    result.authConfig.mode !== nextConfig.mode ||
-    result.authConfig.apiBaseUrl !== nextConfig.apiBaseUrl ||
-    result.authConfig.loginPath !== nextConfig.loginPath ||
-    result.authConfig.csrfPath !== nextConfig.csrfPath
+    shouldUseDefaultConfig ||
+    storedConfig.mode !== nextConfig.mode ||
+    storedConfig.apiBaseUrl !== nextConfig.apiBaseUrl ||
+    storedConfig.loginPath !== nextConfig.loginPath ||
+    storedConfig.csrfPath !== nextConfig.csrfPath
   ) {
     await storageArea.set({ authConfig: nextConfig });
   }
