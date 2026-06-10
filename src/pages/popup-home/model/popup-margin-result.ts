@@ -13,6 +13,7 @@ export interface PopupMarginCalculationInputs {
 
 export interface PopupMarginCalculationResult {
   searchKeyword: string;
+  categories: string[];
   popularItemCount: number;
   priceSampleCount: number;
   trimmedPriceSampleCount: number;
@@ -76,6 +77,16 @@ function getTrimmedAveragePrice(popularItems: PopularItemSnapshot[]): {
   };
 }
 
+function getUniqueCategories(popularItems: PopularItemSnapshot[]): string[] {
+  return Array.from(
+    new Set(
+      popularItems
+        .map((item) => item.category.trim())
+        .filter((category) => category.length > 0),
+    ),
+  );
+}
+
 function divideOrNull(numerator: number, denominator: number): number | null {
   if (denominator === 0) {
     return null;
@@ -128,6 +139,7 @@ export function createPopupMarginCalculationResult({
 
   return {
     searchKeyword: snapshot.searchKeyword,
+    categories: getUniqueCategories(snapshot.popularItems),
     popularItemCount: snapshot.popularItems.length,
     priceSampleCount,
     trimmedPriceSampleCount,
