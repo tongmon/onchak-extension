@@ -1,9 +1,17 @@
+import {
+  DEFAULT_EXCHANGE_RATE,
+  type ProductionCostCurrency,
+} from '@/entities/settings';
+
+export type { ProductionCostCurrency };
+
 export interface PopupFormValues {
+  productionCostCurrency: ProductionCostCurrency;
   productionCost: string | number;
   salesCommission: string | number;
   coupangProductCost: string | number;
   inboundOutboundShippingFee: string | number;
-  overseasShippingFee: string | number;
+  exchangeRate: string | number;
 }
 
 export interface FeedbackState {
@@ -17,19 +25,25 @@ const WRONG_PAGE_MESSAGE =
   '인기상품 검색 결과 페이지가 아닙니다. 해당 화면에서 다시 시도해주세요.';
 
 export function createInitialPopupFormValues(values: {
+  productionCostCurrency: ProductionCostCurrency;
   productionCost: string;
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
-  overseasShippingFee: string;
+  exchangeRate: string;
 }): PopupFormValues {
   return {
+    productionCostCurrency: values.productionCostCurrency,
     productionCost: values.productionCost,
     salesCommission: values.salesCommission,
     coupangProductCost: values.coupangProductCost,
     inboundOutboundShippingFee: values.inboundOutboundShippingFee,
-    overseasShippingFee: values.overseasShippingFee,
+    exchangeRate: values.exchangeRate,
   };
+}
+
+export function isBlankNumberInput(value: string | number): boolean {
+  return typeof value === 'string' && value.trim() === '';
 }
 
 export function normalizeNumberInput(value: string | number): number | null {
@@ -46,6 +60,24 @@ export function normalizeNumberInput(value: string | number): number | null {
   const parsedValue = Number(trimmedValue.replace(/,/g, ''));
 
   return Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : null;
+}
+
+export function normalizeExchangeRateInput(
+  value: string | number,
+): number | null {
+  const normalizedValue = normalizeNumberInput(value);
+
+  return normalizedValue !== null && normalizedValue > 0
+    ? normalizedValue
+    : null;
+}
+
+export function getAppliedExchangeRate(value: string | number): number {
+  if (isBlankNumberInput(value)) {
+    return DEFAULT_EXCHANGE_RATE;
+  }
+
+  return normalizeExchangeRateInput(value) ?? DEFAULT_EXCHANGE_RATE;
 }
 
 export function stringifyFieldValue(value: string | number): string {

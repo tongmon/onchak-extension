@@ -5,18 +5,34 @@ import {
   Button,
   NumberInput,
   Paper,
+  SegmentedControl,
   Stack,
+  Text,
 } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
-import type { FeedbackState, PopupFormValues } from "../model/popup-home-form";
+import { DEFAULT_EXCHANGE_RATE } from "@/entities/settings";
+import type {
+  FeedbackState,
+  PopupFormValues,
+  ProductionCostCurrency,
+} from "../model/popup-home-form";
 
 const COUPANG_FEE_INFORMATION_URL =
   "https://wing.coupang.com/tenants/rfm/settlements/fee-information?utm_source=winghome";
+const PRODUCTION_COST_CURRENCY_OPTIONS: Array<{
+  label: string;
+  value: ProductionCostCurrency;
+}> = [
+  { label: "위안", value: "cny" },
+  { label: "원화", value: "krw" },
+];
 
 interface PopupHomeFormCardProps {
   feedback: FeedbackState | null;
   form: UseFormReturnType<PopupFormValues>;
   isSubmitting: boolean;
+  productionCostCurrency: ProductionCostCurrency;
+  onProductionCostCurrencyChange: (value: ProductionCostCurrency) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
@@ -24,22 +40,44 @@ export function PopupHomeFormCard({
   feedback,
   form,
   isSubmitting,
+  productionCostCurrency,
+  onProductionCostCurrencyChange,
   onSubmit,
 }: PopupHomeFormCardProps): ReactElement {
+  const productionCostSuffix =
+    productionCostCurrency === "cny" ? "위안" : "원";
+  const productionCostPlaceholder =
+    productionCostCurrency === "cny" ? "예: 100" : "예: 35200";
+
   return (
     <Paper p="lg" radius="xl" shadow="sm" withBorder>
       <form onSubmit={onSubmit}>
         <Stack gap="md">
+          <Stack gap={4}>
+            <Text fw={500} size="sm">
+              상품 매입 원가 통화
+            </Text>
+            <SegmentedControl<ProductionCostCurrency>
+              data={PRODUCTION_COST_CURRENCY_OPTIONS}
+              disabled={isSubmitting}
+              fullWidth
+              radius="md"
+              size="sm"
+              value={productionCostCurrency}
+              onChange={onProductionCostCurrencyChange}
+            />
+          </Stack>
+
           <NumberInput
             key={form.key("productionCost")}
             allowNegative={false}
             autoComplete="off"
             decimalScale={2}
             disabled={isSubmitting}
-            label="1688 상품 판매가"
-            placeholder="예: 100"
+            label="상품 매입 원가(소싱 원가)"
+            placeholder={productionCostPlaceholder}
             radius="md"
-            suffix="위안"
+            suffix={productionCostSuffix}
             thousandSeparator=","
             {...form.getInputProps("productionCost")}
           />
@@ -101,16 +139,17 @@ export function PopupHomeFormCard({
           />
 
           <NumberInput
-            key={form.key("overseasShippingFee")}
+            key={form.key("exchangeRate")}
             allowNegative={false}
             autoComplete="off"
             disabled={isSubmitting}
-            label="배송대행지 적용 환율"
-            placeholder="예: 3500"
+            description={`위안화 -> 원화, 비워두면 ${DEFAULT_EXCHANGE_RATE}원 적용`}
+            label="배송 대행지 적용 환율"
+            placeholder={`예: ${DEFAULT_EXCHANGE_RATE}`}
             radius="md"
             suffix="원"
             thousandSeparator=","
-            {...form.getInputProps("overseasShippingFee")}
+            {...form.getInputProps("exchangeRate")}
           />
 
           {feedback ? (

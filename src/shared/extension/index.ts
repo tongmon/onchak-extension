@@ -19,10 +19,12 @@ export {
 export { sendRuntimeMessage } from './messaging/runtime';
 export { sendTabMessage } from './messaging/tabs';
 export {
+  DEFAULT_EXCHANGE_RATE,
   defaultExtensionSettings,
   normalizeExtensionSettings,
   type ExtensionColorScheme,
   type ExtensionSettings,
   type ExtensionStorageSchema,
+  type ProductionCostCurrency,
 } from './storage/schema';
 export { extensionStorage } from './storage/storage';

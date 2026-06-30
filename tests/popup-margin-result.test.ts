@@ -5,11 +5,12 @@ import { createPopupMarginCalculationResult } from '../src/pages/popup-home/mode
 test('createPopupMarginCalculationResult includes unique popular item categories', () => {
   const result = createPopupMarginCalculationResult({
     inputs: {
+      productionCostCurrency: 'cny',
       productionCost: 1000,
       salesCommission: 10,
       coupangProductCost: 5000,
       inboundOutboundShippingFee: 300,
-      overseasShippingFee: 1.2,
+      exchangeRate: 1.2,
     },
     snapshot: {
       searchKeyword: '양말',
@@ -54,4 +55,25 @@ test('createPopupMarginCalculationResult includes unique popular item categories
   });
 
   assert.deepEqual(result.categories, ['패션잡화 > 양말', '생활용품']);
+});
+
+test('createPopupMarginCalculationResult uses production cost directly for KRW inputs', () => {
+  const result = createPopupMarginCalculationResult({
+    inputs: {
+      productionCostCurrency: 'krw',
+      productionCost: 1200,
+      salesCommission: 10,
+      coupangProductCost: 5000,
+      inboundOutboundShippingFee: 300,
+      exchangeRate: 352,
+    },
+    snapshot: {
+      searchKeyword: '양말',
+      averageCost: 5000,
+      costRange: [4500, 5500],
+      popularItems: [],
+    },
+  });
+
+  assert.equal(result.product1688Cost, 1200);
 });

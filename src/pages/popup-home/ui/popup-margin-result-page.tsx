@@ -191,7 +191,7 @@ export function PopupMarginResultPage({
 
         <SimpleGrid cols={1} spacing="xs">
           <MetricCard
-            label="1688 원가"
+            label="상품 매입 원가"
             value={formatWon(result.product1688Cost)}
           />
           <MetricCard

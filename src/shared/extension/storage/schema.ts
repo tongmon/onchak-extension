@@ -1,13 +1,17 @@
 export type ExtensionColorScheme = "auto" | "light" | "dark";
+export type ProductionCostCurrency = "cny" | "krw";
+
+export const DEFAULT_EXCHANGE_RATE = 352;
 
 export interface ExtensionSettings {
   colorScheme: ExtensionColorScheme;
   pageOverlayEnabled: boolean;
+  productionCostCurrency: ProductionCostCurrency;
   productionCost: string;
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
-  overseasShippingFee: string;
+  exchangeRate: string;
 }
 
 export interface ExtensionStorageSchema {
@@ -17,11 +21,12 @@ export interface ExtensionStorageSchema {
 export const defaultExtensionSettings: ExtensionSettings = {
   colorScheme: "auto",
   pageOverlayEnabled: false,
+  productionCostCurrency: "cny",
   productionCost: "",
   salesCommission: "10.8",
   coupangProductCost: "",
   inboundOutboundShippingFee: "",
-  overseasShippingFee: "",
+  exchangeRate: String(DEFAULT_EXCHANGE_RATE),
 };
 
 export const defaultExtensionStorage: ExtensionStorageSchema = {
@@ -29,7 +34,7 @@ export const defaultExtensionStorage: ExtensionStorageSchema = {
 };
 
 export function normalizeExtensionSettings(
-  input?: Partial<ExtensionSettings> | null,
+  input?: (Partial<ExtensionSettings> & { overseasShippingFee?: unknown }) | null,
 ): ExtensionSettings {
   return {
     colorScheme:
@@ -40,6 +45,10 @@ export function normalizeExtensionSettings(
       typeof input?.pageOverlayEnabled === "boolean"
         ? input.pageOverlayEnabled
         : defaultExtensionSettings.pageOverlayEnabled,
+    productionCostCurrency:
+      input?.productionCostCurrency === "krw"
+        ? input.productionCostCurrency
+        : defaultExtensionSettings.productionCostCurrency,
     productionCost:
       typeof input?.productionCost === "string"
         ? input.productionCost
@@ -57,9 +66,12 @@ export function normalizeExtensionSettings(
       typeof input?.inboundOutboundShippingFee === "string"
         ? input.inboundOutboundShippingFee
         : defaultExtensionSettings.inboundOutboundShippingFee,
-    overseasShippingFee:
-      typeof input?.overseasShippingFee === "string"
-        ? input.overseasShippingFee
-        : defaultExtensionSettings.overseasShippingFee,
+    exchangeRate:
+      typeof input?.exchangeRate === "string"
+        ? input.exchangeRate
+        : typeof input?.overseasShippingFee === "string" &&
+            input.overseasShippingFee.trim() !== ""
+          ? input.overseasShippingFee
+          : defaultExtensionSettings.exchangeRate,
   };
 }

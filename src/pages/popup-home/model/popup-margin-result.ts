@@ -2,13 +2,15 @@ import type {
   PopularItemSnapshot,
   PopularSearchSnapshot,
 } from "@/shared/extension";
+import type { ProductionCostCurrency } from "./popup-home-form";
 
 export interface PopupMarginCalculationInputs {
+  productionCostCurrency: ProductionCostCurrency;
   productionCost: number;
   salesCommission: number;
   coupangProductCost: number;
   inboundOutboundShippingFee: number;
-  overseasShippingFee: number;
+  exchangeRate: number;
 }
 
 export interface PopupMarginCalculationResult {
@@ -17,7 +19,9 @@ export interface PopupMarginCalculationResult {
   popularItemCount: number;
   priceSampleCount: number;
   trimmedPriceSampleCount: number;
+  productionCostCurrency: ProductionCostCurrency;
   productionCost: number;
+  exchangeRate: number;
   product1688Cost: number;
   inboundOutboundShippingFeeVat: number;
   salesCommissionFee: number;
@@ -101,7 +105,10 @@ export function createPopupMarginCalculationResult({
   inputs,
   snapshot,
 }: CreatePopupMarginCalculationResultParams): PopupMarginCalculationResult {
-  const product1688Cost = inputs.overseasShippingFee * inputs.productionCost;
+  const product1688Cost =
+    inputs.productionCostCurrency === "cny"
+      ? inputs.exchangeRate * inputs.productionCost
+      : inputs.productionCost;
   const inboundOutboundShippingFeeVat =
     inputs.inboundOutboundShippingFee * 0.1;
   const salesCommissionFee =
@@ -143,7 +150,9 @@ export function createPopupMarginCalculationResult({
     popularItemCount: snapshot.popularItems.length,
     priceSampleCount,
     trimmedPriceSampleCount,
+    productionCostCurrency: inputs.productionCostCurrency,
     productionCost: inputs.productionCost,
+    exchangeRate: inputs.exchangeRate,
     product1688Cost,
     inboundOutboundShippingFeeVat,
     salesCommissionFee,
