@@ -13,7 +13,7 @@ export default defineManifest({
     default_popup: 'src/app/entrypoints/popup/index.html',
   },
   options_page: 'src/app/entrypoints/options/index.html',
-  permissions: ['storage', 'scripting'],
+  permissions: ['storage', 'scripting', 'activeTab', 'tabs', 'downloads'],
   host_permissions: ['https://*/*', 'http://*/*'],
   background: {
     service_worker: 'src/app/entrypoints/background/index.ts',

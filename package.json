@@ -1,11 +1,14 @@
 {
   "name": "onchak-extension",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "playwright:abrs:profile": "node scripts/open-abrs-coupang-profile.mjs",
+    "test": "node --test tests/*.test.ts",
+    "test:e2e:abrs": "playwright test --config playwright.abrs.config.mjs",
     "typecheck": "tsc -b"
   },
   "dependencies": {
@@ -20,6 +23,7 @@
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.2.0",
+    "@playwright/test": "^1.61.1",
     "@types/chrome": "^0.1.4",
     "@types/node": "^24.3.0",
     "@types/react": "^19.0.0",

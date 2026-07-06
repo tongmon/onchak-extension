@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getPopupFeedbackState } from '../src/pages/popup-home/model/popup-home-form.ts';
 import { createPopupMarginCalculationResult } from '../src/pages/popup-home/model/popup-margin-result.ts';
 
 test('createPopupMarginCalculationResult includes unique popular item categories', () => {
@@ -76,4 +77,24 @@ test('createPopupMarginCalculationResult uses production cost directly for KRW i
   });
 
   assert.equal(result.product1688Cost, 1200);
+});
+
+test('getPopupFeedbackState gives a recovery guide when the active tab content script is missing', () => {
+  const feedback = getPopupFeedbackState(
+    new Error('Could not establish connection. Receiving end does not exist.'),
+  );
+
+  assert.equal(feedback.color, 'yellow');
+  assert.equal(feedback.title, '탭 연결 필요');
+  assert.match(feedback.message, /쿠팡 Wing 탭을 새로고침/);
+});
+
+test('getPopupFeedbackState gives the same recovery guide when content script injection is blocked', () => {
+  const feedback = getPopupFeedbackState(
+    new Error('현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.'),
+  );
+
+  assert.equal(feedback.color, 'yellow');
+  assert.equal(feedback.title, '탭 연결 필요');
+  assert.match(feedback.message, /Chrome 확장프로그램을 다시 로드/);
 });

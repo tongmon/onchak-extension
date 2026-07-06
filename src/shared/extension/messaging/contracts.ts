@@ -35,6 +35,36 @@ export interface PopularSearchSnapshot {
   popularItems: PopularItemSnapshot[];
 }
 
+export type AbrsCoupangSurface =
+  | 'wing-inventory'
+  | 'wing-sales'
+  | 'ads-center'
+  | 'wing'
+  | 'unknown';
+
+export interface AbrsCoupangPageSnapshot {
+  href: string;
+  title: string;
+  surface: AbrsCoupangSurface;
+}
+
+export type AbrsCoupangLedgerDownloadSlot =
+  | 'inventoryHealth'
+  | 'salesStatistics'
+  | 'dailySettlement';
+
+export interface AbrsCoupangLedgerDownloadRequest {
+  slot: AbrsCoupangLedgerDownloadSlot;
+  targetDate: string;
+}
+
+export interface AbrsCoupangLedgerDownload {
+  slot: AbrsCoupangLedgerDownloadSlot;
+  fileName: string;
+  mimeType: string;
+  base64: string;
+}
+
 export interface RuntimeMessageMap {
   'system/get-extension-context': {
     request: undefined;
@@ -51,6 +81,14 @@ export interface RuntimeMessageMap {
       tabId: number | null;
       contentScriptConnected: boolean;
     };
+  };
+  'abrs/get-active-tab-coupang-page': {
+    request: undefined;
+    response: AbrsCoupangPageSnapshot;
+  };
+  'abrs/download-active-tab-ledger-file': {
+    request: AbrsCoupangLedgerDownloadRequest;
+    response: AbrsCoupangLedgerDownload;
   };
 }
 
@@ -72,6 +110,14 @@ export interface TabMessageMap {
     response: {
       overlayEnabled: boolean;
     };
+  };
+  'abrs/get-coupang-page': {
+    request: undefined;
+    response: AbrsCoupangPageSnapshot;
+  };
+  'abrs/download-ledger-file': {
+    request: AbrsCoupangLedgerDownloadRequest;
+    response: AbrsCoupangLedgerDownload;
   };
 }
 

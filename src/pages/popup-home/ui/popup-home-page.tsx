@@ -7,6 +7,7 @@ import {
   type ProductionCostCurrency,
   useExtensionSettingsStore,
 } from "@/entities/settings";
+import { AbrsLedgerImportCard } from "@/pages/abrs-automation";
 import { sendRuntimeMessage } from "@/shared/extension";
 import {
   createPopupMarginCalculationResult,
@@ -299,6 +300,7 @@ export function PopupHomePage(): ReactElement {
           onProductionCostCurrencyChange={handleProductionCostCurrencyChange}
           onSubmit={handleCalculate}
         />
+        <AbrsLedgerImportCard />
       </Stack>
     </Box>
   );

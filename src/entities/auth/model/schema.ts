@@ -32,9 +32,23 @@ export interface LoginCredentials {
   password: string;
 }
 
+function normalizeConfiguredBaseUrl(input?: string | null): string | null {
+  const trimmed = input?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
+const configuredDefaultApiBaseUrl = normalizeConfiguredBaseUrl(
+  import.meta.env.VITE_API_BASE_URL,
+);
+
 export const defaultAuthConfig: AuthConfig = {
   mode: "remote",
-  apiBaseUrl: "https://zephlyglobal.com",
+  apiBaseUrl: configuredDefaultApiBaseUrl ?? "http://localhost:8080",
   loginPath: "/api/auth/login",
   csrfPath: "/api/auth/csrf",
 };

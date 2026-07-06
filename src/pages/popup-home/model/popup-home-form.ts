@@ -1,7 +1,7 @@
 import {
   DEFAULT_EXCHANGE_RATE,
   type ProductionCostCurrency,
-} from '@/entities/settings';
+} from '../../../shared/extension/storage/schema.ts';
 
 export type { ProductionCostCurrency };
 
@@ -23,6 +23,11 @@ export interface FeedbackState {
 const MISSING_INFO_MESSAGE = '특정 정보를 찾을 수 없습니다.';
 const WRONG_PAGE_MESSAGE =
   '인기상품 검색 결과 페이지가 아닙니다. 해당 화면에서 다시 시도해주세요.';
+const MISSING_ACTIVE_TAB_RECEIVER_MESSAGE = 'Receiving end does not exist';
+const CONTENT_SCRIPT_DISCONNECTED_MESSAGE =
+  'content script가 연결되지 않았습니다';
+const TAB_CONNECTION_RECOVERY_MESSAGE =
+  '쿠팡 Wing 탭을 새로고침하고, Chrome 확장프로그램을 다시 로드한 뒤 같은 화면에서 다시 시도해주세요.';
 
 export function createInitialPopupFormValues(values: {
   productionCostCurrency: ProductionCostCurrency;
@@ -111,6 +116,17 @@ export function getPopupFeedbackState(error: unknown): FeedbackState {
       color: 'yellow',
       title: '파싱 경고',
       message,
+    };
+  }
+
+  if (
+    message.includes(MISSING_ACTIVE_TAB_RECEIVER_MESSAGE) ||
+    message.includes(CONTENT_SCRIPT_DISCONNECTED_MESSAGE)
+  ) {
+    return {
+      color: 'yellow',
+      title: '탭 연결 필요',
+      message: TAB_CONNECTION_RECOVERY_MESSAGE,
     };
   }
 

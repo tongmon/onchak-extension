@@ -15,6 +15,12 @@ import {
 const CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE =
   '현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.';
 
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, durationMs);
+  });
+}
+
 function isMissingReceiverError(error: unknown): boolean {
   const errorMessage =
     error instanceof Error ? error.message : String(error ?? '');
@@ -65,8 +71,17 @@ async function sendTabMessageWithRecovery<T extends TabMessageType>(
     }
 
     await injectPrimaryContentScript(tabId);
+    await delay(150);
 
-    return sendTabMessage(tabId, message);
+    try {
+      return await sendTabMessage(tabId, message);
+    } catch (retryError) {
+      if (isMissingReceiverError(retryError)) {
+        throw new Error(CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE);
+      }
+
+      throw retryError;
+    }
   }
 }
 
@@ -175,12 +190,43 @@ async function handleSetActiveTabOverlay(
   }
 }
 
+async function handleGetActiveTabAbrsCoupangPage(): Promise<
+  RuntimeMessageMap['abrs/get-active-tab-coupang-page']['response']
+> {
+  const activeTab = await getCurrentActiveTab();
+
+  if (!activeTab?.id) {
+    throw new Error('현재 활성 탭을 찾을 수 없습니다.');
+  }
+
+  return sendTabMessageWithRecovery(activeTab.id, {
+    type: 'abrs/get-coupang-page',
+  });
+}
+
+async function handleDownloadActiveTabAbrsLedgerFile(
+  payload: RuntimeMessageMap['abrs/download-active-tab-ledger-file']['request'],
+): Promise<RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']> {
+  const activeTab = await getCurrentActiveTab();
+
+  if (!activeTab?.id) {
+    throw new Error('현재 활성 탭을 찾을 수 없습니다.');
+  }
+
+  return sendTabMessageWithRecovery(activeTab.id, {
+    type: 'abrs/download-ledger-file',
+    payload,
+  });
+}
+
 async function handleRuntimeMessage(
   message: RuntimeMessage,
 ): Promise<
   | RuntimeMessageMap['system/get-extension-context']['response']
   | RuntimeMessageMap['page/get-active-tab-popular-search-data']['response']
   | RuntimeMessageMap['page/set-active-tab-overlay']['response']
+  | RuntimeMessageMap['abrs/get-active-tab-coupang-page']['response']
+  | RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']
 > {
   switch (message.type) {
     case 'system/get-extension-context':
@@ -194,7 +240,21 @@ async function handleRuntimeMessage(
         throw new Error('Missing payload for page/set-active-tab-overlay.');
       }
 
-      return handleSetActiveTabOverlay(message.payload.enabled);
+      return handleSetActiveTabOverlay(
+        (message as RuntimeMessage<'page/set-active-tab-overlay'>).payload.enabled,
+      );
+
+    case 'abrs/get-active-tab-coupang-page':
+      return handleGetActiveTabAbrsCoupangPage();
+
+    case 'abrs/download-active-tab-ledger-file':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/download-active-tab-ledger-file.');
+      }
+
+      return handleDownloadActiveTabAbrsLedgerFile(
+        (message as RuntimeMessage<'abrs/download-active-tab-ledger-file'>).payload,
+      );
 
     default:
       throw new Error(`Unsupported runtime message: ${String(message)}`);

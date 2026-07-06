@@ -10,6 +10,10 @@ import {
   getOverlayEnabled,
   setOverlayVisibility,
 } from './overlay';
+import {
+  downloadAbrsCoupangLedgerFile,
+  getAbrsCoupangPageSnapshot,
+} from './abrs-coupang-page';
 import { extractPopularSearchSnapshot } from './popular-search-parser';
 
 async function syncOverlayFromStorage(): Promise<void> {
@@ -24,6 +28,8 @@ async function handleTabMessage(
   | TabMessageMap['page/get-dom-snapshot']['response']
   | TabMessageMap['page/get-popular-search-data']['response']
   | TabMessageMap['page/set-overlay']['response']
+  | TabMessageMap['abrs/get-coupang-page']['response']
+  | TabMessageMap['abrs/download-ledger-file']['response']
 > {
   switch (message.type) {
     case 'page/get-dom-snapshot':
@@ -37,8 +43,20 @@ async function handleTabMessage(
         throw new Error('Missing payload for page/set-overlay.');
       }
 
-      setOverlayVisibility(message.payload.enabled);
+      setOverlayVisibility((message as TabMessage<'page/set-overlay'>).payload.enabled);
       return { overlayEnabled: getOverlayEnabled() };
+
+    case 'abrs/get-coupang-page':
+      return getAbrsCoupangPageSnapshot();
+
+    case 'abrs/download-ledger-file':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/download-ledger-file.');
+      }
+
+      return downloadAbrsCoupangLedgerFile(
+        (message as TabMessage<'abrs/download-ledger-file'>).payload,
+      );
 
     default:
       throw new Error(`Unsupported tab message: ${String(message)}`);
