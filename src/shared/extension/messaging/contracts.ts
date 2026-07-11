@@ -53,6 +53,16 @@ export type AbrsCoupangLedgerDownloadSlot =
   | 'salesStatistics'
   | 'dailySettlement';
 
+export type AbrsLedgerSourceType =
+  | 'COUPANG_INVENTORY_HEALTH'
+  | 'COUPANG_SALES_STATISTICS'
+  | 'COUPANG_DAILY_SETTLEMENT';
+
+export interface AbrsLedgerDateRange {
+  start: string;
+  end: string;
+}
+
 export interface AbrsCoupangLedgerDownloadRequest {
   slot: AbrsCoupangLedgerDownloadSlot;
   targetDate: string;
@@ -63,6 +73,36 @@ export interface AbrsCoupangLedgerDownload {
   fileName: string;
   mimeType: string;
   base64: string;
+}
+
+export interface AbrsLedgerPersistedEntry {
+  slot: AbrsCoupangLedgerDownloadSlot;
+  sourceType: AbrsLedgerSourceType;
+  label: string;
+  dateRange: AbrsLedgerDateRange | null;
+  fileName: string;
+  mimeType: string;
+  base64: string;
+  size: number;
+  savedAt: string;
+}
+
+export interface AbrsLedgerBatch {
+  targetDate: string;
+  updatedAt: string | null;
+  entries: AbrsLedgerPersistedEntry[];
+}
+
+export interface AbrsLedgerDownloadSlotStatus {
+  slot: AbrsCoupangLedgerDownloadSlot;
+  status: 'downloaded' | 'failed';
+  fileName?: string;
+  error?: string;
+  tabUrl?: string;
+}
+
+export interface AbrsLedgerSelectedTargetDate {
+  targetDate: string;
 }
 
 export interface RuntimeMessageMap {
@@ -89,6 +129,36 @@ export interface RuntimeMessageMap {
   'abrs/download-active-tab-ledger-file': {
     request: AbrsCoupangLedgerDownloadRequest;
     response: AbrsCoupangLedgerDownload;
+  };
+  'abrs/get-ledger-batch': {
+    request: { targetDate: string };
+    response: AbrsLedgerBatch;
+  };
+  'abrs/save-ledger-batch-files': {
+    request: {
+      targetDate: string;
+      entries: AbrsLedgerPersistedEntry[];
+    };
+    response: AbrsLedgerBatch;
+  };
+  'abrs/clear-ledger-batch': {
+    request: { targetDate: string };
+    response: AbrsLedgerBatch;
+  };
+  'abrs/download-all-ledger-files': {
+    request: { targetDate: string };
+    response: {
+      batch: AbrsLedgerBatch;
+      statuses: AbrsLedgerDownloadSlotStatus[];
+    };
+  };
+  'abrs/get-ledger-target-date': {
+    request: { fallbackDate: string };
+    response: AbrsLedgerSelectedTargetDate;
+  };
+  'abrs/save-ledger-target-date': {
+    request: { targetDate: string };
+    response: AbrsLedgerSelectedTargetDate;
   };
 }
 

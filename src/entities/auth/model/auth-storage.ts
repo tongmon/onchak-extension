@@ -9,12 +9,13 @@ import {
 
 const storageArea = chrome.storage.local;
 const legacyAuthApiBaseUrl = 'http://59.16.223.28:3000';
-const productionAuthApiBaseUrl = 'https://zephlyglobal.com';
+const localAuthApiBaseUrl = 'http://localhost:8080';
 
 function shouldMigrateLegacyConfig(config?: Partial<AuthConfig>): boolean {
   return (
     config?.apiBaseUrl === legacyAuthApiBaseUrl ||
-    config?.apiBaseUrl === productionAuthApiBaseUrl
+    (defaultAuthConfig.apiBaseUrl !== localAuthApiBaseUrl &&
+      config?.apiBaseUrl === localAuthApiBaseUrl)
   );
 }
 

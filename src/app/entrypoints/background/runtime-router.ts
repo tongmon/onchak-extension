@@ -5,15 +5,34 @@ import {
   messageSuccess,
   sendTabMessage,
   type ActiveTabSnapshot,
+  type AbrsCoupangLedgerDownload,
+  type AbrsCoupangLedgerDownloadSlot,
+  type AbrsLedgerBatch,
+  type AbrsLedgerDownloadSlotStatus,
+  type AbrsLedgerPersistedEntry,
   type RuntimeMessage,
   type RuntimeMessageMap,
   type TabMessage,
   type TabMessageMap,
   type TabMessageType,
 } from '@/shared/extension';
+import { upsertAbrsLedgerPersistedDownloads } from '@/pages/abrs-automation/model/abrs-ledger-batch-cache';
 
 const CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE =
   '현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.';
+const ABRS_LEDGER_BATCH_STORAGE_PREFIX = 'abrsLedgerBatch:';
+const ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY =
+  'abrsLedgerSelectedTargetDate';
+const ABRS_LEDGER_DOWNLOAD_SLOTS: AbrsCoupangLedgerDownloadSlot[] = [
+  'inventoryHealth',
+  'salesStatistics',
+  'dailySettlement',
+];
+const WING_LEDGER_START_URL =
+  'https://wing.coupang.com/tenants/rfm-inventory/management/list';
+const ADS_LEDGER_START_URL =
+  'https://advertising.coupang.com/marketing-reporting/billboard/settlements/daily';
+const COUPANG_AUTH_HOST = 'xauth.coupang.com';
 
 function delay(durationMs: number): Promise<void> {
   return new Promise((resolve) => {
@@ -219,6 +238,461 @@ async function handleDownloadActiveTabAbrsLedgerFile(
   });
 }
 
+function createAbrsLedgerBatchStorageKey(targetDate: string): string {
+  return `${ABRS_LEDGER_BATCH_STORAGE_PREFIX}${targetDate}`;
+}
+
+function isValidAbrsLedgerTargetDate(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+async function getStoredAbrsLedgerTargetDate(
+  fallbackDate: string,
+): Promise<RuntimeMessageMap['abrs/get-ledger-target-date']['response']> {
+  const result = (await chrome.storage.local.get([
+    ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY,
+  ])) as Record<string, unknown>;
+  const storedTargetDate = result[ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY];
+
+  return {
+    targetDate: isValidAbrsLedgerTargetDate(storedTargetDate)
+      ? storedTargetDate
+      : fallbackDate,
+  };
+}
+
+async function setStoredAbrsLedgerTargetDate(
+  targetDate: string,
+): Promise<RuntimeMessageMap['abrs/save-ledger-target-date']['response']> {
+  if (!isValidAbrsLedgerTargetDate(targetDate)) {
+    throw new Error('장부 날짜 형식이 올바르지 않습니다.');
+  }
+
+  await chrome.storage.local.set({
+    [ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY]: targetDate,
+  });
+
+  return { targetDate };
+}
+
+function createEmptyAbrsLedgerBatch(targetDate: string): AbrsLedgerBatch {
+  return {
+    targetDate,
+    updatedAt: null,
+    entries: [],
+  };
+}
+
+function normalizeAbrsLedgerBatch(
+  targetDate: string,
+  value: unknown,
+): AbrsLedgerBatch {
+  if (!value || typeof value !== 'object') {
+    return createEmptyAbrsLedgerBatch(targetDate);
+  }
+
+  const candidate = value as Partial<AbrsLedgerBatch>;
+
+  return {
+    targetDate,
+    updatedAt:
+      typeof candidate.updatedAt === 'string' ? candidate.updatedAt : null,
+    entries: Array.isArray(candidate.entries) ? candidate.entries : [],
+  };
+}
+
+async function getStoredAbrsLedgerBatch(targetDate: string): Promise<AbrsLedgerBatch> {
+  const storageKey = createAbrsLedgerBatchStorageKey(targetDate);
+  const result = (await chrome.storage.local.get([storageKey])) as Record<
+    string,
+    unknown
+  >;
+
+  return normalizeAbrsLedgerBatch(targetDate, result[storageKey]);
+}
+
+async function setStoredAbrsLedgerBatch(
+  batch: AbrsLedgerBatch,
+): Promise<AbrsLedgerBatch> {
+  const nextBatch: AbrsLedgerBatch = {
+    ...batch,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await chrome.storage.local.set({
+    [createAbrsLedgerBatchStorageKey(batch.targetDate)]: nextBatch,
+  });
+
+  return nextBatch;
+}
+
+function upsertPersistedEntries(
+  existingEntries: AbrsLedgerPersistedEntry[],
+  incomingEntries: AbrsLedgerPersistedEntry[],
+): AbrsLedgerPersistedEntry[] {
+  return incomingEntries.reduce<AbrsLedgerPersistedEntry[]>((entries, entry) => {
+    const existingIndex = entries.findIndex(
+      (candidate) => candidate.slot === entry.slot,
+    );
+
+    if (existingIndex >= 0) {
+      const nextEntries = [...entries];
+      nextEntries[existingIndex] = entry;
+      return nextEntries;
+    }
+
+    return [...entries, entry];
+  }, [...existingEntries]);
+}
+
+async function handleGetAbrsLedgerBatch(
+  payload: RuntimeMessageMap['abrs/get-ledger-batch']['request'],
+): Promise<RuntimeMessageMap['abrs/get-ledger-batch']['response']> {
+  return getStoredAbrsLedgerBatch(payload.targetDate);
+}
+
+async function handleSaveAbrsLedgerBatchFiles(
+  payload: RuntimeMessageMap['abrs/save-ledger-batch-files']['request'],
+): Promise<RuntimeMessageMap['abrs/save-ledger-batch-files']['response']> {
+  const currentBatch = await getStoredAbrsLedgerBatch(payload.targetDate);
+
+  return setStoredAbrsLedgerBatch({
+    targetDate: payload.targetDate,
+    updatedAt: currentBatch.updatedAt,
+    entries: upsertPersistedEntries(currentBatch.entries, payload.entries),
+  });
+}
+
+async function handleClearAbrsLedgerBatch(
+  payload: RuntimeMessageMap['abrs/clear-ledger-batch']['request'],
+): Promise<RuntimeMessageMap['abrs/clear-ledger-batch']['response']> {
+  await chrome.storage.local.remove(
+    createAbrsLedgerBatchStorageKey(payload.targetDate),
+  );
+
+  return createEmptyAbrsLedgerBatch(payload.targetDate);
+}
+
+function getTabUrl(tab: chrome.tabs.Tab): URL | null {
+  if (!tab.url) {
+    return null;
+  }
+
+  try {
+    return new URL(tab.url);
+  } catch {
+    return null;
+  }
+}
+
+function isWingTab(tab: chrome.tabs.Tab): boolean {
+  return getTabUrl(tab)?.hostname.toLowerCase() === 'wing.coupang.com';
+}
+
+function isAdsTab(tab: chrome.tabs.Tab): boolean {
+  const hostname = getTabUrl(tab)?.hostname.toLowerCase();
+
+  return hostname === 'advertising.coupang.com' || hostname === 'ads.coupang.com';
+}
+
+function getCoupangAuthRedirectUrl(tab: chrome.tabs.Tab): URL | null {
+  const url = getTabUrl(tab);
+
+  if (url?.hostname.toLowerCase() !== COUPANG_AUTH_HOST) {
+    return null;
+  }
+
+  const redirectUri = url.searchParams.get('redirect_uri');
+
+  if (!redirectUri) {
+    return null;
+  }
+
+  try {
+    return new URL(redirectUri);
+  } catch {
+    return null;
+  }
+}
+
+function isCoupangAuthTabForSlot(
+  tab: chrome.tabs.Tab,
+  slot: AbrsCoupangLedgerDownloadSlot,
+): boolean {
+  const redirectUrl = getCoupangAuthRedirectUrl(tab);
+
+  if (!redirectUrl) {
+    return false;
+  }
+
+  const redirectHostname = redirectUrl.hostname.toLowerCase();
+
+  return slot === 'dailySettlement'
+    ? redirectHostname === 'advertising.coupang.com' ||
+        redirectHostname === 'ads.coupang.com'
+    : redirectHostname === 'wing.coupang.com';
+}
+
+function isTabUsableForAbrsSlot(
+  tab: chrome.tabs.Tab,
+  slot: AbrsCoupangLedgerDownloadSlot,
+): boolean {
+  if (slot === 'dailySettlement' ? isAdsTab(tab) : isWingTab(tab)) {
+    return true;
+  }
+
+  return isCoupangAuthTabForSlot(tab, slot);
+}
+
+function getAbrsSlotStartUrl(slot: AbrsCoupangLedgerDownloadSlot): string {
+  return slot === 'dailySettlement'
+    ? ADS_LEDGER_START_URL
+    : WING_LEDGER_START_URL;
+}
+
+async function findAbrsTabForSlot(
+  slot: AbrsCoupangLedgerDownloadSlot,
+): Promise<chrome.tabs.Tab | null> {
+  const activeTab = await getCurrentActiveTab();
+
+  if (activeTab?.id && isTabUsableForAbrsSlot(activeTab, slot)) {
+    return activeTab;
+  }
+
+  const tabs = await chrome.tabs.query({});
+
+  return tabs.find((tab) => tab.id && isTabUsableForAbrsSlot(tab, slot)) ?? null;
+}
+
+async function waitForTabReady(tabId: number): Promise<void> {
+  const currentTab = await chrome.tabs.get(tabId);
+
+  if (currentTab.status === 'complete') {
+    return;
+  }
+
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      const listener = (
+        updatedTabId: number,
+        changeInfo: chrome.tabs.OnUpdatedInfo,
+      ) => {
+        if (updatedTabId !== tabId || changeInfo.status !== 'complete') {
+          return;
+        }
+
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      };
+
+      chrome.tabs.onUpdated.addListener(listener);
+    }),
+    delay(8_000),
+  ]);
+}
+
+async function waitForTabNavigation(tabId: number): Promise<chrome.tabs.Tab> {
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      const listener = (
+        updatedTabId: number,
+        changeInfo: chrome.tabs.OnUpdatedInfo,
+        tab: chrome.tabs.Tab,
+      ) => {
+        if (updatedTabId !== tabId) {
+          return;
+        }
+
+        const url = tab.url ?? changeInfo.url ?? '';
+
+        if (
+          changeInfo.status === 'complete' ||
+          url.includes('wing.coupang.com') ||
+          url.includes('advertising.coupang.com') ||
+          url.includes('ads.coupang.com')
+        ) {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+
+      chrome.tabs.onUpdated.addListener(listener);
+    }),
+    delay(10_000),
+  ]);
+
+  return chrome.tabs.get(tabId);
+}
+
+async function clickCoupangAuthLoginButton(tabId: number): Promise<boolean> {
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const normalizeText = (value: string | null | undefined) =>
+        value?.replace(/\s+/g, ' ').trim() ?? '';
+      const candidates = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          'button, input[type="button"], input[type="submit"], a, [role="button"]',
+        ),
+      );
+      const loginButton = candidates.find((element) => {
+        if (element.offsetParent === null) {
+          return false;
+        }
+
+        const text = normalizeText(element.textContent);
+        const value = normalizeText(
+          element instanceof HTMLInputElement ? element.value : null,
+        );
+        const ariaLabel = normalizeText(element.getAttribute('aria-label'));
+        const title = normalizeText(element.getAttribute('title'));
+
+        return [text, value, ariaLabel, title].some(
+          (candidate) => candidate === '로그인' || candidate.includes('로그인'),
+        );
+      });
+
+      loginButton?.click();
+
+      return Boolean(loginButton);
+    },
+  });
+
+  return Boolean(result?.result);
+}
+
+async function resolveCoupangAuthRedirect(
+  tab: chrome.tabs.Tab,
+  slot: AbrsCoupangLedgerDownloadSlot,
+): Promise<chrome.tabs.Tab> {
+  if (!tab.id || !isCoupangAuthTabForSlot(tab, slot)) {
+    return tab;
+  }
+
+  const clicked = await clickCoupangAuthLoginButton(tab.id);
+
+  if (!clicked) {
+    throw new Error(
+      'Coupang 인증 화면에서 로그인 버튼을 찾지 못했습니다. 열린 Coupang 로그인 탭에서 로그인 버튼을 눌러주세요.',
+    );
+  }
+
+  const nextTab = await waitForTabNavigation(tab.id);
+
+  if (isCoupangAuthTabForSlot(nextTab, slot)) {
+    throw new Error(
+      'Coupang 로그인 버튼을 눌렀지만 Wing/광고센터로 이동하지 않았습니다. 열린 탭에서 로그인 상태를 확인한 뒤 다시 시도해주세요.',
+    );
+  }
+
+  return nextTab;
+}
+
+async function getOrOpenAbrsTabForSlot(
+  slot: AbrsCoupangLedgerDownloadSlot,
+): Promise<chrome.tabs.Tab> {
+  const existingTab = await findAbrsTabForSlot(slot);
+
+  if (existingTab?.id) {
+    return resolveCoupangAuthRedirect(existingTab, slot);
+  }
+
+  const createdTab = await chrome.tabs.create({
+    active: false,
+    url: getAbrsSlotStartUrl(slot),
+  });
+
+  if (!createdTab.id) {
+    throw new Error('Coupang 탭을 열지 못했습니다.');
+  }
+
+  await waitForTabReady(createdTab.id);
+
+  return resolveCoupangAuthRedirect(await chrome.tabs.get(createdTab.id), slot);
+}
+
+async function downloadAbrsLedgerSlot(
+  slot: AbrsCoupangLedgerDownloadSlot,
+  targetDate: string,
+): Promise<{
+  download: AbrsCoupangLedgerDownload | null;
+  status: AbrsLedgerDownloadSlotStatus;
+}> {
+  let tab: chrome.tabs.Tab | null = null;
+
+  try {
+    tab = await getOrOpenAbrsTabForSlot(slot);
+
+    if (!tab.id) {
+      throw new Error('Coupang 탭 ID를 찾지 못했습니다.');
+    }
+
+    const download = await sendTabMessageWithRecovery(tab.id, {
+      type: 'abrs/download-ledger-file',
+      payload: { slot, targetDate },
+    });
+
+    return {
+      download,
+      status: {
+        slot,
+        status: 'downloaded',
+        fileName: download.fileName,
+        tabUrl: tab.url,
+      },
+    };
+  } catch (error) {
+    return {
+      download: null,
+      status: {
+        slot,
+        status: 'failed',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Coupang 파일을 가져오지 못했습니다.',
+        tabUrl: tab?.url,
+      },
+    };
+  }
+}
+
+async function handleDownloadAllAbrsLedgerFiles(
+  payload: RuntimeMessageMap['abrs/download-all-ledger-files']['request'],
+): Promise<RuntimeMessageMap['abrs/download-all-ledger-files']['response']> {
+  const currentBatch = await getStoredAbrsLedgerBatch(payload.targetDate);
+  const downloads: AbrsCoupangLedgerDownload[] = [];
+  const statuses: AbrsLedgerDownloadSlotStatus[] = [];
+
+  for (const slot of ABRS_LEDGER_DOWNLOAD_SLOTS) {
+    const result = await downloadAbrsLedgerSlot(slot, payload.targetDate);
+
+    statuses.push(result.status);
+
+    if (result.download) {
+      downloads.push(result.download);
+    }
+  }
+
+  const entries = upsertAbrsLedgerPersistedDownloads({
+    existingEntries: currentBatch.entries,
+    downloads,
+  });
+  const batch =
+    downloads.length > 0
+      ? await setStoredAbrsLedgerBatch({
+          targetDate: payload.targetDate,
+          updatedAt: currentBatch.updatedAt,
+          entries,
+        })
+      : currentBatch;
+
+  return {
+    batch,
+    statuses,
+  };
+}
+
 async function handleRuntimeMessage(
   message: RuntimeMessage,
 ): Promise<
@@ -227,6 +701,12 @@ async function handleRuntimeMessage(
   | RuntimeMessageMap['page/set-active-tab-overlay']['response']
   | RuntimeMessageMap['abrs/get-active-tab-coupang-page']['response']
   | RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']
+  | RuntimeMessageMap['abrs/get-ledger-batch']['response']
+  | RuntimeMessageMap['abrs/save-ledger-batch-files']['response']
+  | RuntimeMessageMap['abrs/clear-ledger-batch']['response']
+  | RuntimeMessageMap['abrs/download-all-ledger-files']['response']
+  | RuntimeMessageMap['abrs/get-ledger-target-date']['response']
+  | RuntimeMessageMap['abrs/save-ledger-target-date']['response']
 > {
   switch (message.type) {
     case 'system/get-extension-context':
@@ -254,6 +734,62 @@ async function handleRuntimeMessage(
 
       return handleDownloadActiveTabAbrsLedgerFile(
         (message as RuntimeMessage<'abrs/download-active-tab-ledger-file'>).payload,
+      );
+
+    case 'abrs/get-ledger-batch':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/get-ledger-batch.');
+      }
+
+      return handleGetAbrsLedgerBatch(
+        (message as RuntimeMessage<'abrs/get-ledger-batch'>).payload,
+      );
+
+    case 'abrs/save-ledger-batch-files':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/save-ledger-batch-files.');
+      }
+
+      return handleSaveAbrsLedgerBatchFiles(
+        (message as RuntimeMessage<'abrs/save-ledger-batch-files'>).payload,
+      );
+
+    case 'abrs/clear-ledger-batch':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/clear-ledger-batch.');
+      }
+
+      return handleClearAbrsLedgerBatch(
+        (message as RuntimeMessage<'abrs/clear-ledger-batch'>).payload,
+      );
+
+    case 'abrs/download-all-ledger-files':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/download-all-ledger-files.');
+      }
+
+      return handleDownloadAllAbrsLedgerFiles(
+        (message as RuntimeMessage<'abrs/download-all-ledger-files'>).payload,
+      );
+
+    case 'abrs/get-ledger-target-date':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/get-ledger-target-date.');
+      }
+
+      return getStoredAbrsLedgerTargetDate(
+        (message as RuntimeMessage<'abrs/get-ledger-target-date'>).payload
+          .fallbackDate,
+      );
+
+    case 'abrs/save-ledger-target-date':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/save-ledger-target-date.');
+      }
+
+      return setStoredAbrsLedgerTargetDate(
+        (message as RuntimeMessage<'abrs/save-ledger-target-date'>).payload
+          .targetDate,
       );
 
     default:
