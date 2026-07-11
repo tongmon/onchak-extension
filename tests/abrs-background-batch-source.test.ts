@@ -71,7 +71,7 @@ test('background runtime never submits Coupang xauth credential forms', async ()
   );
 });
 
-test('background runtime starts Coupang ads downloads from dashboard and recovers login tabs', async () => {
+test('background runtime starts Coupang ads downloads from dashboard without stealing popup focus', async () => {
   const router = await source(
     '../src/app/entrypoints/background/runtime-router.ts',
   );
@@ -89,10 +89,10 @@ test('background runtime starts Coupang ads downloads from dashboard and recover
     router,
     /slot === 'dailySettlement' && isAdsLoginTab\(tab\)[\s\S]{0,80}return true/,
   );
-  assert.match(router, /function focusAbrsTab/);
-  assert.match(router, /chrome\.windows\.update/);
-  assert.match(router, /chrome\.tabs\.update\(tab\.id, \{ active: true \}\)/);
-  assert.match(router, /active: true/);
+  assert.match(router, /function prepareAbrsTab/);
+  assert.doesNotMatch(router, /chrome\.windows\.update/);
+  assert.doesNotMatch(router, /chrome\.tabs\.update\(tab\.id, \{ active: true \}\)/);
+  assert.match(router, /active: false/);
   assert.match(router, /function waitForStableAbrsTab/);
   assert.match(router, /stableCount >= 2/);
   assert.match(router, /function assertAbrsTabReadyForSlot/);

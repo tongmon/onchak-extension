@@ -515,16 +515,11 @@ async function waitForTabReady(tabId: number): Promise<void> {
   ]);
 }
 
-async function focusAbrsTab(tab: chrome.tabs.Tab): Promise<chrome.tabs.Tab> {
+async function prepareAbrsTab(tab: chrome.tabs.Tab): Promise<chrome.tabs.Tab> {
   if (!tab.id) {
     return tab;
   }
 
-  if (typeof tab.windowId === 'number') {
-    await chrome.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
-  }
-
-  await chrome.tabs.update(tab.id, { active: true });
   await waitForTabReady(tab.id);
   await delay(1_000);
 
@@ -684,17 +679,17 @@ async function getOrOpenAbrsTabForSlot(
   const existingTab = await findAbrsTabForSlot(slot);
 
   if (existingTab?.id) {
-    const focusedTab = await focusAbrsTab(existingTab);
-    if (!focusedTab.id) {
-      return resolveCoupangAuthRedirect(focusedTab, slot);
+    const preparedTab = await prepareAbrsTab(existingTab);
+    if (!preparedTab.id) {
+      return resolveCoupangAuthRedirect(preparedTab, slot);
     }
-    const stableTab = await waitForStableAbrsTab(focusedTab.id);
+    const stableTab = await waitForStableAbrsTab(preparedTab.id);
 
     return resolveCoupangAuthRedirect(stableTab, slot);
   }
 
   const createdTab = await chrome.tabs.create({
-    active: true,
+    active: false,
     url: getAbrsSlotStartUrl(slot),
   });
 
@@ -702,11 +697,11 @@ async function getOrOpenAbrsTabForSlot(
     throw new Error('Coupang 탭을 열지 못했습니다.');
   }
 
-  const focusedTab = await focusAbrsTab(createdTab);
-  if (!focusedTab.id) {
-    return resolveCoupangAuthRedirect(focusedTab, slot);
+  const preparedTab = await prepareAbrsTab(createdTab);
+  if (!preparedTab.id) {
+    return resolveCoupangAuthRedirect(preparedTab, slot);
   }
-  const stableTab = await waitForStableAbrsTab(focusedTab.id);
+  const stableTab = await waitForStableAbrsTab(preparedTab.id);
 
   return resolveCoupangAuthRedirect(stableTab, slot);
 }
