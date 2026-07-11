@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   createDailySettlementGraphqlRequest,
@@ -108,6 +109,19 @@ test('createDailySettlementGraphqlRequest matches Coupang ads daily settlement q
     settlementDomain: 'SELLER',
   });
   assert.match(String(request.query), /getDailySettlement/);
+});
+
+test('daily settlement downloader gives a login guide instead of parsing HTML', async () => {
+  const source = await readFile(
+    new URL('../src/app/entrypoints/content/abrs-coupang-page.ts', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /ADS_LOGIN_REQUIRED_MESSAGE/);
+  assert.match(source, /content-type/);
+  assert.match(source, /application\/json/);
+  assert.match(source, /marketing\/dashboard/);
+  assert.doesNotMatch(source, /Unexpected token/);
 });
 
 test('createDailySettlementWorkbookFileName uses Coupang daily settlement naming', () => {

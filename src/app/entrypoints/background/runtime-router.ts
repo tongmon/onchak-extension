@@ -20,6 +20,10 @@ import { upsertAbrsLedgerPersistedDownloads } from '@/pages/abrs-automation/mode
 
 const CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE =
   '현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.';
+const COUPANG_ADS_LOGIN_REQUIRED_MESSAGE =
+  'Coupang 광고센터 로그인 세션이 필요합니다. https://advertising.coupang.com/marketing/dashboard 를 연 뒤 로그인 상태를 확인해주세요.';
+const COUPANG_DIRECT_LOGIN_REQUIRED_MESSAGE =
+  'Coupang 인증 화면에서 직접 로그인이 필요합니다. 열린 Coupang 로그인 탭에서 로그인한 뒤 다시 시도해주세요.';
 const ABRS_LEDGER_BATCH_STORAGE_PREFIX = 'abrsLedgerBatch:';
 const ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY =
   'abrsLedgerSelectedTargetDate';
@@ -31,7 +35,7 @@ const ABRS_LEDGER_DOWNLOAD_SLOTS: AbrsCoupangLedgerDownloadSlot[] = [
 const WING_LEDGER_START_URL =
   'https://wing.coupang.com/tenants/rfm-inventory/management/list';
 const ADS_LEDGER_START_URL =
-  'https://advertising.coupang.com/marketing-reporting/billboard/settlements/daily';
+  'https://advertising.coupang.com/marketing/dashboard';
 const COUPANG_AUTH_HOST = 'xauth.coupang.com';
 
 function delay(durationMs: number): Promise<void> {
@@ -395,6 +399,26 @@ function isAdsTab(tab: chrome.tabs.Tab): boolean {
   return hostname === 'advertising.coupang.com' || hostname === 'ads.coupang.com';
 }
 
+function isAdsLoginTab(tab: chrome.tabs.Tab): boolean {
+  const url = getTabUrl(tab);
+
+  if (!url) {
+    return false;
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const pathname = url.pathname.toLowerCase();
+
+  return (
+    (hostname === 'advertising.coupang.com' || hostname === 'ads.coupang.com') &&
+    pathname.startsWith('/user/login')
+  );
+}
+
+function isAdsDataTab(tab: chrome.tabs.Tab): boolean {
+  return isAdsTab(tab) && !isAdsLoginTab(tab);
+}
+
 function getCoupangAuthRedirectUrl(tab: chrome.tabs.Tab): URL | null {
   const url = getTabUrl(tab);
 
@@ -437,7 +461,7 @@ function isTabUsableForAbrsSlot(
   tab: chrome.tabs.Tab,
   slot: AbrsCoupangLedgerDownloadSlot,
 ): boolean {
-  if (slot === 'dailySettlement' ? isAdsTab(tab) : isWingTab(tab)) {
+  if (slot === 'dailySettlement' ? isAdsDataTab(tab) : isWingTab(tab)) {
     return true;
   }
 
@@ -491,6 +515,47 @@ async function waitForTabReady(tabId: number): Promise<void> {
   ]);
 }
 
+async function focusAbrsTab(tab: chrome.tabs.Tab): Promise<chrome.tabs.Tab> {
+  if (!tab.id) {
+    return tab;
+  }
+
+  if (typeof tab.windowId === 'number') {
+    await chrome.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
+  }
+
+  await chrome.tabs.update(tab.id, { active: true });
+  await waitForTabReady(tab.id);
+  await delay(1_000);
+
+  return chrome.tabs.get(tab.id);
+}
+
+async function waitForStableAbrsTab(tabId: number): Promise<chrome.tabs.Tab> {
+  let previousUrl: string | undefined;
+  let stableCount = 0;
+  let latestTab = await chrome.tabs.get(tabId);
+
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    latestTab = await chrome.tabs.get(tabId);
+
+    if (latestTab.status === 'complete' && latestTab.url === previousUrl) {
+      stableCount += 1;
+    } else {
+      stableCount = 0;
+      previousUrl = latestTab.url;
+    }
+
+    if (stableCount >= 2) {
+      return latestTab;
+    }
+
+    await delay(500);
+  }
+
+  return latestTab;
+}
+
 async function waitForTabNavigation(tabId: number): Promise<chrome.tabs.Tab> {
   await Promise.race([
     new Promise<void>((resolve) => {
@@ -530,13 +595,30 @@ async function clickCoupangAuthLoginButton(tabId: number): Promise<boolean> {
     func: () => {
       const normalizeText = (value: string | null | undefined) =>
         value?.replace(/\s+/g, ' ').trim() ?? '';
+      const isVisible = (element: HTMLElement) => element.offsetParent !== null;
+      const visibleInputs = Array.from(
+        document.querySelectorAll<HTMLInputElement>(
+          'input[type="email"], input[type="text"], input[type="password"], input[name*="user" i], input[name*="id" i], input[name*="password" i]',
+        ),
+      ).filter(isVisible);
+      const hasCredentialForm = visibleInputs.some(
+        (element) =>
+          element.type === 'password' ||
+          /password/i.test(element.name) ||
+          /password/i.test(element.id),
+      );
+
+      if (hasCredentialForm) {
+        return false;
+      }
+
       const candidates = Array.from(
         document.querySelectorAll<HTMLElement>(
           'button, input[type="button"], input[type="submit"], a, [role="button"]',
         ),
       );
       const loginButton = candidates.find((element) => {
-        if (element.offsetParent === null) {
+        if (!isVisible(element)) {
           return false;
         }
 
@@ -565,27 +647,35 @@ async function resolveCoupangAuthRedirect(
   tab: chrome.tabs.Tab,
   slot: AbrsCoupangLedgerDownloadSlot,
 ): Promise<chrome.tabs.Tab> {
-  if (!tab.id || !isCoupangAuthTabForSlot(tab, slot)) {
+  if (!tab.id) {
     return tab;
   }
 
-  const clicked = await clickCoupangAuthLoginButton(tab.id);
+  if (slot === 'dailySettlement' && isAdsLoginTab(tab)) {
+    const clicked = await clickCoupangAuthLoginButton(tab.id);
 
-  if (!clicked) {
-    throw new Error(
-      'Coupang 인증 화면에서 로그인 버튼을 찾지 못했습니다. 열린 Coupang 로그인 탭에서 로그인 버튼을 눌러주세요.',
-    );
+    if (!clicked) {
+      throw new Error(
+        'Coupang 광고센터 로그인 화면에서 로그인하기 버튼을 찾지 못했습니다. 열린 광고센터 탭에서 로그인한 뒤 다시 시도해주세요.',
+      );
+    }
+
+    const nextTab = await waitForTabNavigation(tab.id);
+
+    if (isAdsLoginTab(nextTab)) {
+      throw new Error(
+        'Coupang 광고센터 로그인 버튼을 눌렀지만 광고센터로 이동하지 않았습니다. 열린 탭에서 로그인 상태를 확인한 뒤 다시 시도해주세요.',
+      );
+    }
+
+    return resolveCoupangAuthRedirect(nextTab, slot);
   }
 
-  const nextTab = await waitForTabNavigation(tab.id);
-
-  if (isCoupangAuthTabForSlot(nextTab, slot)) {
-    throw new Error(
-      'Coupang 로그인 버튼을 눌렀지만 Wing/광고센터로 이동하지 않았습니다. 열린 탭에서 로그인 상태를 확인한 뒤 다시 시도해주세요.',
-    );
+  if (!isCoupangAuthTabForSlot(tab, slot)) {
+    return tab;
   }
 
-  return nextTab;
+  throw new Error(COUPANG_DIRECT_LOGIN_REQUIRED_MESSAGE);
 }
 
 async function getOrOpenAbrsTabForSlot(
@@ -594,11 +684,17 @@ async function getOrOpenAbrsTabForSlot(
   const existingTab = await findAbrsTabForSlot(slot);
 
   if (existingTab?.id) {
-    return resolveCoupangAuthRedirect(existingTab, slot);
+    const focusedTab = await focusAbrsTab(existingTab);
+    if (!focusedTab.id) {
+      return resolveCoupangAuthRedirect(focusedTab, slot);
+    }
+    const stableTab = await waitForStableAbrsTab(focusedTab.id);
+
+    return resolveCoupangAuthRedirect(stableTab, slot);
   }
 
   const createdTab = await chrome.tabs.create({
-    active: false,
+    active: true,
     url: getAbrsSlotStartUrl(slot),
   });
 
@@ -606,9 +702,34 @@ async function getOrOpenAbrsTabForSlot(
     throw new Error('Coupang 탭을 열지 못했습니다.');
   }
 
-  await waitForTabReady(createdTab.id);
+  const focusedTab = await focusAbrsTab(createdTab);
+  if (!focusedTab.id) {
+    return resolveCoupangAuthRedirect(focusedTab, slot);
+  }
+  const stableTab = await waitForStableAbrsTab(focusedTab.id);
 
-  return resolveCoupangAuthRedirect(await chrome.tabs.get(createdTab.id), slot);
+  return resolveCoupangAuthRedirect(stableTab, slot);
+}
+
+async function assertAbrsTabReadyForSlot(
+  tab: chrome.tabs.Tab,
+  slot: AbrsCoupangLedgerDownloadSlot,
+): Promise<chrome.tabs.Tab> {
+  if (!tab.id) {
+    return tab;
+  }
+
+  const stableTab = await waitForStableAbrsTab(tab.id);
+
+  if (slot === 'dailySettlement' && isAdsLoginTab(stableTab)) {
+    throw new Error(COUPANG_ADS_LOGIN_REQUIRED_MESSAGE);
+  }
+
+  if (isCoupangAuthTabForSlot(stableTab, slot)) {
+    throw new Error(COUPANG_DIRECT_LOGIN_REQUIRED_MESSAGE);
+  }
+
+  return stableTab;
 }
 
 async function downloadAbrsLedgerSlot(
@@ -622,6 +743,12 @@ async function downloadAbrsLedgerSlot(
 
   try {
     tab = await getOrOpenAbrsTabForSlot(slot);
+
+    if (!tab.id) {
+      throw new Error('Coupang 탭 ID를 찾지 못했습니다.');
+    }
+
+    tab = await assertAbrsTabReadyForSlot(tab, slot);
 
     if (!tab.id) {
       throw new Error('Coupang 탭 ID를 찾지 못했습니다.');

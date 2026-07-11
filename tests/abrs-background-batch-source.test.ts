@@ -51,7 +51,7 @@ test('background runtime persists the selected ABRS target date', async () => {
   assert.match(router, /abrs\/save-ledger-target-date/);
 });
 
-test('background runtime handles Coupang xauth redirect by clicking the login continuation button', async () => {
+test('background runtime never submits Coupang xauth credential forms', async () => {
   const router = await source(
     '../src/app/entrypoints/background/runtime-router.ts',
   );
@@ -60,4 +60,45 @@ test('background runtime handles Coupang xauth redirect by clicking the login co
   assert.match(router, /redirect_uri/);
   assert.match(router, /clickCoupangAuthLoginButton/);
   assert.match(router, /로그인/);
+  assert.match(router, /hasCredentialForm/);
+  assert.doesNotMatch(router, /everyCredentialInputIsBlank/);
+  assert.match(router, /if \(hasCredentialForm\) \{\s*return false;\s*\}/);
+  assert.match(router, /Coupang 인증 화면에서 직접 로그인이 필요합니다/);
+  assert.match(router, /COUPANG_DIRECT_LOGIN_REQUIRED_MESSAGE/);
+  assert.match(
+    router,
+    /if \(!isCoupangAuthTabForSlot\(tab, slot\)\) \{\s*return tab;\s*\}\s*throw new Error\(COUPANG_DIRECT_LOGIN_REQUIRED_MESSAGE\);/,
+  );
+});
+
+test('background runtime starts Coupang ads downloads from dashboard and recovers login tabs', async () => {
+  const router = await source(
+    '../src/app/entrypoints/background/runtime-router.ts',
+  );
+
+  assert.match(router, /https:\/\/advertising\.coupang\.com\/marketing\/dashboard/);
+  assert.doesNotMatch(
+    router,
+    /const ADS_LEDGER_START_URL =\s*['"]https:\/\/advertising\.coupang\.com\/user\/login/,
+  );
+  assert.match(router, /function isAdsLoginTab/);
+  assert.match(router, /pathname\.startsWith\('\/user\/login'\)/);
+  assert.match(router, /function isAdsDataTab/);
+  assert.match(router, /isAdsTab\(tab\) && !isAdsLoginTab\(tab\)/);
+  assert.doesNotMatch(
+    router,
+    /slot === 'dailySettlement' && isAdsLoginTab\(tab\)[\s\S]{0,80}return true/,
+  );
+  assert.match(router, /function focusAbrsTab/);
+  assert.match(router, /chrome\.windows\.update/);
+  assert.match(router, /chrome\.tabs\.update\(tab\.id, \{ active: true \}\)/);
+  assert.match(router, /active: true/);
+  assert.match(router, /function waitForStableAbrsTab/);
+  assert.match(router, /stableCount >= 2/);
+  assert.match(router, /function assertAbrsTabReadyForSlot/);
+  assert.match(router, /COUPANG_ADS_LOGIN_REQUIRED_MESSAGE/);
+  assert.match(
+    router,
+    /slot === 'dailySettlement' && isAdsLoginTab\(stableTab\)/,
+  );
 });

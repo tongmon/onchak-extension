@@ -33,6 +33,8 @@ interface RequestAutoDownloadResponse {
 
 const XLSX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const ADS_LOGIN_REQUIRED_MESSAGE =
+  'Coupang 광고센터 로그인 세션이 필요합니다. https://advertising.coupang.com/marketing/dashboard 를 연 뒤 로그인 상태를 확인해주세요.';
 
 const INVENTORY_HEALTH_EXCEL_PATH =
   '/tenants/rfm-inventory/inventory-health-dashboard/excel-report';
@@ -492,6 +494,10 @@ export function getDailySettlementFromGraphqlResponse(
 async function downloadDailySettlementFile(
   targetDate: string,
 ): Promise<Omit<AbrsCoupangLedgerDownload, 'slot'>> {
+  if (window.location.pathname.toLowerCase().startsWith('/user/login')) {
+    throw new Error(ADS_LOGIN_REQUIRED_MESSAGE);
+  }
+
   const response = await fetch(ADS_REPORTING_GRAPHQL_PATH, {
     method: 'POST',
     credentials: 'include',
@@ -505,7 +511,16 @@ async function downloadDailySettlementFile(
     throw new Error(`광고비 정산 데이터 조회 실패: ${response.status}`);
   }
 
-  const settlement = getDailySettlementFromGraphqlResponse(await response.json());
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new Error(ADS_LOGIN_REQUIRED_MESSAGE);
+  }
+
+  const payload = await response.json().catch(() => {
+    throw new Error(ADS_LOGIN_REQUIRED_MESSAGE);
+  });
+  const settlement = getDailySettlementFromGraphqlResponse(payload);
   const workbookBytes = createDailySettlementWorkbookBytes(settlement);
   const blob = uint8ArrayToBlob(workbookBytes, XLSX_MIME_TYPE);
 
