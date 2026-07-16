@@ -23,6 +23,7 @@ async function ensureDefaults(): Promise<void> {
     current.settings?.productionCostCurrency !==
       nextSettings.productionCostCurrency ||
     current.settings?.productionCost !== nextSettings.productionCost ||
+    current.settings?.productUrl !== nextSettings.productUrl ||
     current.settings?.salesCommission !== nextSettings.salesCommission ||
     current.settings?.coupangProductCost !== nextSettings.coupangProductCost ||
     current.settings?.inboundOutboundShippingFee !==

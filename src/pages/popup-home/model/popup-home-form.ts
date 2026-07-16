@@ -8,6 +8,7 @@ export type { ProductionCostCurrency };
 export interface PopupFormValues {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: string | number;
+  productUrl: string;
   salesCommission: string | number;
   coupangProductCost: string | number;
   inboundOutboundShippingFee: string | number;
@@ -32,6 +33,7 @@ const TAB_CONNECTION_RECOVERY_MESSAGE =
 export function createInitialPopupFormValues(values: {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: string;
+  productUrl: string;
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
@@ -40,6 +42,7 @@ export function createInitialPopupFormValues(values: {
   return {
     productionCostCurrency: values.productionCostCurrency,
     productionCost: values.productionCost,
+    productUrl: values.productUrl,
     salesCommission: values.salesCommission,
     coupangProductCost: values.coupangProductCost,
     inboundOutboundShippingFee: values.inboundOutboundShippingFee,

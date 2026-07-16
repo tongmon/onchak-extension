@@ -8,6 +8,7 @@ import {
   SegmentedControl,
   Stack,
   Text,
+  TextInput,
 } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
 import { DEFAULT_EXCHANGE_RATE } from "@/entities/settings";
@@ -80,6 +81,17 @@ export function PopupHomeFormCard({
             suffix={productionCostSuffix}
             thousandSeparator=","
             {...form.getInputProps("productionCost")}
+          />
+
+          <TextInput
+            key={form.key("productUrl")}
+            autoComplete="url"
+            disabled={isSubmitting}
+            label="상품 URL"
+            placeholder="예: https://example.com/product"
+            radius="md"
+            type="url"
+            {...form.getInputProps("productUrl")}
           />
 
           <NumberInput

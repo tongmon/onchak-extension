@@ -7,6 +7,7 @@ import type { ProductionCostCurrency } from "./popup-home-form";
 export interface PopupMarginCalculationInputs {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: number;
+  productUrl: string;
   salesCommission: number;
   coupangProductCost: number;
   inboundOutboundShippingFee: number;
@@ -21,6 +22,7 @@ export interface PopupMarginCalculationResult {
   trimmedPriceSampleCount: number;
   productionCostCurrency: ProductionCostCurrency;
   productionCost: number;
+  productUrl: string;
   exchangeRate: number;
   product1688Cost: number;
   inboundOutboundShippingFeeVat: number;
@@ -152,6 +154,7 @@ export function createPopupMarginCalculationResult({
     trimmedPriceSampleCount,
     productionCostCurrency: inputs.productionCostCurrency,
     productionCost: inputs.productionCost,
+    productUrl: inputs.productUrl,
     exchangeRate: inputs.exchangeRate,
     product1688Cost,
     inboundOutboundShippingFeeVat,

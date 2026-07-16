@@ -8,6 +8,7 @@ export interface ExtensionSettings {
   pageOverlayEnabled: boolean;
   productionCostCurrency: ProductionCostCurrency;
   productionCost: string;
+  productUrl: string;
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
@@ -23,6 +24,7 @@ export const defaultExtensionSettings: ExtensionSettings = {
   pageOverlayEnabled: false,
   productionCostCurrency: "cny",
   productionCost: "",
+  productUrl: "",
   salesCommission: "10.8",
   coupangProductCost: "",
   inboundOutboundShippingFee: "",
@@ -53,6 +55,10 @@ export function normalizeExtensionSettings(
       typeof input?.productionCost === "string"
         ? input.productionCost
         : defaultExtensionSettings.productionCost,
+    productUrl:
+      typeof input?.productUrl === "string"
+        ? input.productUrl
+        : defaultExtensionSettings.productUrl,
     salesCommission:
       typeof input?.salesCommission === "string" &&
       input.salesCommission.trim() !== ""

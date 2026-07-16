@@ -44,6 +44,7 @@ export function PopupHomePage(): ReactElement {
     initialValues: createInitialPopupFormValues({
       productionCostCurrency: settings.productionCostCurrency,
       productionCost: settings.productionCost,
+      productUrl: settings.productUrl,
       salesCommission: settings.salesCommission,
       coupangProductCost: settings.coupangProductCost,
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
@@ -77,6 +78,7 @@ export function PopupHomePage(): ReactElement {
     const nextValues = createInitialPopupFormValues({
       productionCostCurrency: settings.productionCostCurrency,
       productionCost: settings.productionCost,
+      productUrl: settings.productUrl,
       salesCommission: settings.salesCommission,
       coupangProductCost: settings.coupangProductCost,
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
@@ -91,6 +93,7 @@ export function PopupHomePage(): ReactElement {
         nextValues.productionCostCurrency &&
       String(currentValues.productionCost) ===
         String(nextValues.productionCost) &&
+      currentValues.productUrl === nextValues.productUrl &&
       String(currentValues.salesCommission) ===
         String(nextValues.salesCommission) &&
       String(currentValues.coupangProductCost) ===
@@ -108,6 +111,7 @@ export function PopupHomePage(): ReactElement {
   }, [
     settings.productionCostCurrency,
     settings.productionCost,
+    settings.productUrl,
     settings.salesCommission,
     settings.coupangProductCost,
     settings.inboundOutboundShippingFee,
@@ -143,6 +147,7 @@ export function PopupHomePage(): ReactElement {
     const normalizedValues = {
       productionCostCurrency: values.productionCostCurrency,
       productionCost: stringifyFieldValue(values.productionCost),
+      productUrl: values.productUrl.trim(),
       salesCommission: stringifyFieldValue(values.salesCommission),
       coupangProductCost: stringifyFieldValue(values.coupangProductCost),
       inboundOutboundShippingFee: stringifyFieldValue(
@@ -170,6 +175,7 @@ export function PopupHomePage(): ReactElement {
           inputs: {
             productionCostCurrency: values.productionCostCurrency,
             productionCost,
+            productUrl: values.productUrl.trim(),
             salesCommission,
             coupangProductCost,
             inboundOutboundShippingFee,
@@ -189,6 +195,7 @@ export function PopupHomePage(): ReactElement {
     const defaultSavedValues = {
       productionCostCurrency: defaultExtensionSettings.productionCostCurrency,
       productionCost: defaultExtensionSettings.productionCost,
+      productUrl: defaultExtensionSettings.productUrl,
       salesCommission: defaultExtensionSettings.salesCommission,
       coupangProductCost: defaultExtensionSettings.coupangProductCost,
       inboundOutboundShippingFee:
