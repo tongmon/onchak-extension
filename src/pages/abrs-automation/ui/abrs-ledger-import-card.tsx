@@ -45,6 +45,7 @@ import {
 } from '../api/abrs-ledger-batch-runtime';
 import { downloadAbrsCoupangLedgerFileFromActiveTab } from '../api/download-abrs-coupang-ledger-file';
 import { useUploadAbrsLedgerImportMutation } from '../api/upload-abrs-ledger-import-mutation';
+import type { AbrsCoupangLedgerDownloadSlot } from '@/shared/extension';
 
 interface UploadFeedback {
   color: 'green' | 'red' | 'yellow';
@@ -56,17 +57,25 @@ interface UploadFeedback {
 const SLOT_ROWS: Array<{
   slot: AbrsLedgerFileSlot;
   label: string;
+  required: boolean;
 }> = [
-  { slot: 'inventoryHealth', label: '재고 현황' },
-  { slot: 'salesStatistics', label: '판매 현황' },
-  { slot: 'dailySettlement', label: '광고비/정산' },
+  { slot: 'inventoryHealth', label: '재고 현황', required: true },
+  { slot: 'salesStatistics', label: '판매 현황', required: true },
+  { slot: 'dailySettlement', label: '광고비/정산', required: true },
+  { slot: 'productList', label: '상품 리스트', required: false },
 ];
 
-const AUTO_DOWNLOADABLE_SLOTS = new Set<AbrsLedgerFileSlot>([
+const AUTO_DOWNLOADABLE_SLOTS = new Set<AbrsCoupangLedgerDownloadSlot>([
   'inventoryHealth',
   'salesStatistics',
   'dailySettlement',
 ]);
+
+function isAutoDownloadableSlot(
+  slot: AbrsLedgerFileSlot,
+): slot is AbrsCoupangLedgerDownloadSlot {
+  return AUTO_DOWNLOADABLE_SLOTS.has(slot as AbrsCoupangLedgerDownloadSlot);
+}
 
 function formatDateInputValue(date: Date): string {
   const year = date.getFullYear();
@@ -156,6 +165,9 @@ export function AbrsLedgerImportCard(): ReactElement {
     [entries],
   );
   const shouldShowValidation = !validation.ok && !feedback?.suppressValidation;
+  const requiredEntryCount = SLOT_ROWS.filter(
+    (row) => row.required && entriesBySlot.has(row.slot),
+  ).length;
 
   useEffect(() => {
     let active = true;
@@ -325,7 +337,9 @@ export function AbrsLedgerImportCard(): ReactElement {
     }
   };
 
-  const handleDownloadFromCoupang = async (slot: AbrsLedgerFileSlot) => {
+  const handleDownloadFromCoupang = async (
+    slot: AbrsCoupangLedgerDownloadSlot,
+  ) => {
     setFeedback(null);
     setDownloadingSlot(slot);
 
@@ -400,7 +414,7 @@ export function AbrsLedgerImportCard(): ReactElement {
             </Text>
           </Stack>
           <Badge color={validation.ok ? 'teal' : 'gray'} radius="xl" variant="light">
-            {loadingBatch ? 'Loading' : validation.ok ? 'Ready' : `${entries.length}/3`}
+            {loadingBatch ? 'Loading' : validation.ok ? 'Ready' : `${requiredEntryCount}/3 필수`}
           </Badge>
         </Group>
 
@@ -425,7 +439,7 @@ export function AbrsLedgerImportCard(): ReactElement {
           radius="md"
           variant="light"
         >
-          3개 한번에 가져오기
+          필수 3개 한번에 가져오기
         </Button>
 
         <Paper
@@ -440,6 +454,9 @@ export function AbrsLedgerImportCard(): ReactElement {
           <Stack gap="sm">
             {SLOT_ROWS.map((row) => {
               const entry = entriesBySlot.get(row.slot);
+              const downloadableSlot = isAutoDownloadableSlot(row.slot)
+                ? row.slot
+                : null;
 
               return (
                 <Group key={row.slot} gap="xs" justify="space-between" wrap="nowrap">
@@ -452,13 +469,13 @@ export function AbrsLedgerImportCard(): ReactElement {
                     </Text>
                   </Stack>
                   <Group gap="xs" wrap="nowrap">
-                    {AUTO_DOWNLOADABLE_SLOTS.has(row.slot) ? (
+                    {downloadableSlot ? (
                       <Button
                         aria-label={`${row.label} Wing 파일 가져오기`}
                         disabled={downloadingAll || downloadingSlot !== null}
                         loading={downloadingSlot === row.slot}
                         onClick={() => {
-                          void handleDownloadFromCoupang(row.slot);
+                          void handleDownloadFromCoupang(downloadableSlot);
                         }}
                         radius="md"
                         size="compact-xs"
@@ -468,7 +485,7 @@ export function AbrsLedgerImportCard(): ReactElement {
                       </Button>
                     ) : null}
                     <Badge color={entry ? 'teal' : 'gray'} radius="xl" variant="light">
-                      {entry ? 'OK' : 'Need'}
+                      {entry ? 'OK' : row.required ? 'Need' : 'Optional'}
                     </Badge>
                   </Group>
                 </Group>

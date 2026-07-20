@@ -56,6 +56,17 @@ test('classifyAbrsLedgerFile maps inventory health without using its timestamp a
   });
 });
 
+test('classifyAbrsLedgerFile maps optional Coupang product list files', () => {
+  const classified = classifyAbrsLedgerFile('price_inventory_260717.xlsx');
+
+  assert.deepEqual(classified, {
+    slot: 'productList',
+    sourceType: 'COUPANG_PRICE_INVENTORY',
+    label: '상품 리스트',
+    dateRange: null,
+  });
+});
+
 test('upsertAbrsLedgerFiles keeps files stacked when they are added one by one', () => {
   const targetDate = '2026-04-18';
   const afterInventory = upsertAbrsLedgerFiles(
@@ -125,6 +136,26 @@ test('validateAbrsLedgerFiles accepts the three required workbook slots', () => 
     targetDate,
   );
 
+  assert.deepEqual(validateAbrsLedgerFiles(entries, targetDate), {
+    ok: true,
+    messages: [],
+  });
+});
+
+test('validateAbrsLedgerFiles keeps the product list optional', () => {
+  const targetDate = '2026-04-18';
+  const entries = upsertAbrsLedgerFiles(
+    [],
+    [
+      file('inventory_health_sku_info_20260616220816.xlsx'),
+      file('Statistics-20260418~20260418_(0).xlsx'),
+      file('A01549099-dailySettlement-20260418-20260418.xlsx'),
+      file('price_inventory_260717.xlsx'),
+    ],
+    targetDate,
+  );
+
+  assert.equal(entries.at(-1)?.slot, 'productList');
   assert.deepEqual(validateAbrsLedgerFiles(entries, targetDate), {
     ok: true,
     messages: [],

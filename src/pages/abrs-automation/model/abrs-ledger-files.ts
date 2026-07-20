@@ -1,12 +1,14 @@
 export type AbrsLedgerFileSlot =
   | 'inventoryHealth'
   | 'salesStatistics'
-  | 'dailySettlement';
+  | 'dailySettlement'
+  | 'productList';
 
 export type AbrsLedgerSourceType =
   | 'COUPANG_INVENTORY_HEALTH'
   | 'COUPANG_SALES_STATISTICS'
-  | 'COUPANG_DAILY_SETTLEMENT';
+  | 'COUPANG_DAILY_SETTLEMENT'
+  | 'COUPANG_PRICE_INVENTORY';
 
 export interface AbrsLedgerDateRange {
   start: string;
@@ -44,6 +46,10 @@ const SLOT_DEFINITIONS: Record<
   dailySettlement: {
     sourceType: 'COUPANG_DAILY_SETTLEMENT',
     label: '광고비/정산',
+  },
+  productList: {
+    sourceType: 'COUPANG_PRICE_INVENTORY',
+    label: '상품 리스트',
   },
 };
 
@@ -104,6 +110,10 @@ export function classifyAbrsLedgerFile(
 
   if (/^inventory_health_sku_info_\d{14}\.xlsx$/i.test(normalizedName)) {
     return createClassification('inventoryHealth', null);
+  }
+
+  if (/^price_inventory_.+\.xlsx$/i.test(normalizedName)) {
+    return createClassification('productList', null);
   }
 
   const statisticsMatch = normalizedName.match(

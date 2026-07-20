@@ -121,7 +121,6 @@ export function restoreAbrsLedgerEntries(
     label: entry.label,
     dateRange: entry.dateRange,
     file: createFileFromAbrsCoupangDownload({
-      slot: entry.slot,
       fileName: entry.fileName,
       mimeType: entry.mimeType,
       base64: entry.base64,

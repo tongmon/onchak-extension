@@ -53,10 +53,13 @@ export type AbrsCoupangLedgerDownloadSlot =
   | 'salesStatistics'
   | 'dailySettlement';
 
+export type AbrsLedgerFileSlot = AbrsCoupangLedgerDownloadSlot | 'productList';
+
 export type AbrsLedgerSourceType =
   | 'COUPANG_INVENTORY_HEALTH'
   | 'COUPANG_SALES_STATISTICS'
-  | 'COUPANG_DAILY_SETTLEMENT';
+  | 'COUPANG_DAILY_SETTLEMENT'
+  | 'COUPANG_PRICE_INVENTORY';
 
 export interface AbrsLedgerDateRange {
   start: string;
@@ -76,7 +79,7 @@ export interface AbrsCoupangLedgerDownload {
 }
 
 export interface AbrsLedgerPersistedEntry {
-  slot: AbrsCoupangLedgerDownloadSlot;
+  slot: AbrsLedgerFileSlot;
   sourceType: AbrsLedgerSourceType;
   label: string;
   dateRange: AbrsLedgerDateRange | null;

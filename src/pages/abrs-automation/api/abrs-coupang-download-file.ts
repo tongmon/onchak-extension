@@ -1,4 +1,8 @@
-import type { AbrsCoupangLedgerDownload } from '../../../shared/extension/messaging/contracts.ts';
+interface AbrsLedgerFilePayload {
+  fileName: string;
+  mimeType: string;
+  base64: string;
+}
 
 function base64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -12,7 +16,7 @@ function base64ToBytes(base64: string): Uint8Array {
 }
 
 export function createFileFromAbrsCoupangDownload(
-  download: AbrsCoupangLedgerDownload,
+  download: AbrsLedgerFilePayload,
 ): File {
   const bytes = base64ToBytes(download.base64);
   const buffer = bytes.buffer.slice(

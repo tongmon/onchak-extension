@@ -23,6 +23,7 @@ test('buildAbrsLedgerImportFormData creates the OMS ledger import multipart payl
       workbook('inventory_health_sku_info_20260616220816.xlsx'),
       workbook('Statistics-20260418~20260418_(0).xlsx'),
       workbook('A01549099-dailySettlement-20260418-20260418.xlsx'),
+      workbook('price_inventory_260717.xlsx'),
     ],
     targetDate,
   );
@@ -41,6 +42,7 @@ test('buildAbrsLedgerImportFormData creates the OMS ledger import multipart payl
       'inventory_health_sku_info_20260616220816.xlsx',
       'Statistics-20260418~20260418_(0).xlsx',
       'A01549099-dailySettlement-20260418-20260418.xlsx',
+      'price_inventory_260717.xlsx',
     ],
   );
 });
