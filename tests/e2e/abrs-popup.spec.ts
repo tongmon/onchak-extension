@@ -214,3 +214,53 @@ test('ABRS popup restores the selected ledger date after losing foreground', asy
     await context.close();
   }
 });
+
+test('margin calculator restores draft inputs after popup remount', async ({}, testInfo) => {
+  const context = await chromium.launchPersistentContext(
+    testInfo.outputPath('margin-draft-profile'),
+    {
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionPath}`,
+        `--load-extension=${extensionPath}`,
+      ],
+    },
+  );
+
+  try {
+    const firstPopup = await openExtensionPopup(context);
+    await expect(
+      firstPopup.getByRole('heading', { name: '마진율 계산기' }),
+    ).toBeVisible();
+    await firstPopup.getByLabel('상품 매입 원가(소싱 원가)').fill('12500');
+    await firstPopup.getByLabel('쿠팡 상품 판매가').fill('22900');
+    await firstPopup
+      .getByLabel('원가 사이트 링크')
+      .fill('https://detail.1688.com/offer/123.html');
+
+    await expect
+      .poll(() =>
+        firstPopup.evaluate(async () => {
+          const stored = await chrome.storage.local.get([
+            'popupMarginCalculatorDraft',
+          ]);
+          return stored.popupMarginCalculatorDraft?.productUrl;
+        }),
+      )
+      .toBe('https://detail.1688.com/offer/123.html');
+    await firstPopup.close();
+
+    const secondPopup = await openExtensionPopup(context);
+    await expect(
+      secondPopup.getByLabel('상품 매입 원가(소싱 원가)'),
+    ).toHaveValue('12,500위안');
+    await expect(secondPopup.getByLabel('쿠팡 상품 판매가')).toHaveValue(
+      '22,900원',
+    );
+    await expect(secondPopup.getByLabel('원가 사이트 링크')).toHaveValue(
+      'https://detail.1688.com/offer/123.html',
+    );
+  } finally {
+    await context.close();
+  }
+});

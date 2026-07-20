@@ -50,6 +50,24 @@ export function createInitialPopupFormValues(values: {
   };
 }
 
+export function normalizeProductUrl(value: string): string | null {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmedValue);
+
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function isBlankNumberInput(value: string | number): boolean {
   return typeof value === 'string' && value.trim() === '';
 }

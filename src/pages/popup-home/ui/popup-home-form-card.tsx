@@ -87,10 +87,10 @@ export function PopupHomeFormCard({
             key={form.key("productUrl")}
             autoComplete="url"
             disabled={isSubmitting}
-            label="상품 URL"
-            placeholder="예: https://example.com/product"
+            inputMode="url"
+            label="원가 사이트 링크"
+            placeholder="https://..."
             radius="md"
-            type="url"
             {...form.getInputProps("productUrl")}
           />
 

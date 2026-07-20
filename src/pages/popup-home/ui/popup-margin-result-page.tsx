@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   Alert,
+  Anchor,
   Badge,
   Box,
   Button,
@@ -143,9 +144,19 @@ export function PopupMarginResultPage({
                 <Title fw={600} order={4}>
                   계산 결과
                 </Title>
-                <Text c="dimmed" size="sm">
-                  {result.searchKeyword}
-                </Text>
+            <Text c="dimmed" size="sm">
+              {result.searchKeyword}
+            </Text>
+            {result.productUrl ? (
+              <Anchor
+                href={result.productUrl}
+                rel="noreferrer"
+                size="xs"
+                target="_blank"
+              >
+                원가 사이트 열기
+              </Anchor>
+            ) : null}
               </Stack>
               <Badge color="teal" radius="sm" variant="light">
                 {result.popularItemCount} items

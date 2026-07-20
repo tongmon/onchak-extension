@@ -8,7 +8,7 @@ test('createPopupMarginCalculationResult includes unique popular item categories
     inputs: {
       productionCostCurrency: 'cny',
       productionCost: 1000,
-      productUrl: 'https://example.com/product-a',
+      productUrl: 'https://detail.1688.com/offer/123.html',
       salesCommission: 10,
       coupangProductCost: 5000,
       inboundOutboundShippingFee: 300,
@@ -57,7 +57,7 @@ test('createPopupMarginCalculationResult includes unique popular item categories
   });
 
   assert.deepEqual(result.categories, ['패션잡화 > 양말', '생활용품']);
-  assert.equal(result.productUrl, 'https://example.com/product-a');
+  assert.equal(result.productUrl, 'https://detail.1688.com/offer/123.html');
 });
 
 test('createPopupMarginCalculationResult uses production cost directly for KRW inputs', () => {

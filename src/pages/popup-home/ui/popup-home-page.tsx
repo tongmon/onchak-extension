@@ -20,15 +20,21 @@ import {
   isBlankNumberInput,
   normalizeExchangeRateInput,
   normalizeNumberInput,
+  normalizeProductUrl,
   stringifyFieldValue,
   type FeedbackState,
   type PopupFormValues,
 } from "../model/popup-home-form";
+import {
+  loadPopupMarginDraft,
+  savePopupMarginDraft,
+} from "../model/popup-margin-draft";
 import { PopupHomeFormCard } from "./popup-home-form-card";
 import { PopupMarginResultPage } from "./popup-margin-result-page";
 
 export function PopupHomePage(): ReactElement {
   const settings = useExtensionSettingsStore((state) => state.settings);
+  const settingsStatus = useExtensionSettingsStore((state) => state.status);
   const updateSettings = useExtensionSettingsStore((state) => state.update);
   const logoutMutation = useLogoutMutation();
   const [productionCostCurrency, setProductionCostCurrency] =
@@ -38,6 +44,7 @@ export function PopupHomePage(): ReactElement {
     useState<PopupMarginCalculationResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isDraftReady, setIsDraftReady] = useState(false);
 
   const form = useForm<PopupFormValues>({
     mode: "uncontrolled",
@@ -50,6 +57,18 @@ export function PopupHomePage(): ReactElement {
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
       exchangeRate: settings.exchangeRate,
     }),
+    onValuesChange: (values) => {
+      void savePopupMarginDraft(values).catch((error) => {
+        setFeedback({
+          color: "yellow",
+          title: "입력값 저장 실패",
+          message:
+            error instanceof Error
+              ? error.message
+              : "마진율 계산기 입력값을 cache에 저장하지 못했습니다.",
+        });
+      });
+    },
     validate: {
       productionCost: (value) =>
         normalizeNumberInput(value) === null
@@ -71,11 +90,20 @@ export function PopupHomePage(): ReactElement {
         isBlankNumberInput(value) || normalizeExchangeRateInput(value) !== null
           ? null
           : "배송 대행지 적용 환율을 0보다 큰 숫자로 입력해주세요.",
+      productUrl: (value) =>
+        !value.trim() || normalizeProductUrl(value) !== null
+          ? null
+          : "http 또는 https로 시작하는 원가 사이트 링크를 입력해주세요.",
     },
   });
 
   useEffect(() => {
-    const nextValues = createInitialPopupFormValues({
+    if (settingsStatus !== "ready") {
+      return;
+    }
+
+    let active = true;
+    const fallbackValues = createInitialPopupFormValues({
       productionCostCurrency: settings.productionCostCurrency,
       productionCost: settings.productionCost,
       productUrl: settings.productUrl,
@@ -84,31 +112,43 @@ export function PopupHomePage(): ReactElement {
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
       exchangeRate: settings.exchangeRate,
     });
-    const currentValues = form.getValues();
 
-    setProductionCostCurrency(nextValues.productionCostCurrency);
+    void loadPopupMarginDraft(fallbackValues)
+      .then((nextValues) => {
+        if (!active) {
+          return;
+        }
 
-    if (
-      currentValues.productionCostCurrency ===
-        nextValues.productionCostCurrency &&
-      String(currentValues.productionCost) ===
-        String(nextValues.productionCost) &&
-      currentValues.productUrl === nextValues.productUrl &&
-      String(currentValues.salesCommission) ===
-        String(nextValues.salesCommission) &&
-      String(currentValues.coupangProductCost) ===
-        String(nextValues.coupangProductCost) &&
-      String(currentValues.inboundOutboundShippingFee) ===
-        String(nextValues.inboundOutboundShippingFee) &&
-      String(currentValues.exchangeRate) === String(nextValues.exchangeRate)
-    ) {
-      return;
-    }
+        setProductionCostCurrency(nextValues.productionCostCurrency);
+        form.setInitialValues(nextValues);
+        form.setValues(nextValues);
+        form.resetDirty();
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
 
-    form.setInitialValues(nextValues);
-    form.setValues(nextValues);
-    form.resetDirty();
+        setFeedback({
+          color: "yellow",
+          title: "입력값 불러오기 실패",
+          message:
+            error instanceof Error
+              ? error.message
+              : "저장된 마진율 계산기 입력값을 불러오지 못했습니다.",
+        });
+      })
+      .finally(() => {
+        if (active) {
+          setIsDraftReady(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [
+    settingsStatus,
     settings.productionCostCurrency,
     settings.productionCost,
     settings.productUrl,
@@ -128,13 +168,15 @@ export function PopupHomePage(): ReactElement {
     const exchangeRate = isBlankNumberInput(values.exchangeRate)
       ? getAppliedExchangeRate(values.exchangeRate)
       : normalizeExchangeRateInput(values.exchangeRate);
+    const productUrl = normalizeProductUrl(values.productUrl);
 
     if (
       productionCost === null ||
       salesCommission === null ||
       coupangProductCost === null ||
       inboundOutboundShippingFee === null ||
-      exchangeRate === null
+      exchangeRate === null ||
+      (values.productUrl.trim() && productUrl === null)
     ) {
       setFeedback({
         color: "red",
@@ -147,7 +189,7 @@ export function PopupHomePage(): ReactElement {
     const normalizedValues = {
       productionCostCurrency: values.productionCostCurrency,
       productionCost: stringifyFieldValue(values.productionCost),
-      productUrl: values.productUrl.trim(),
+      productUrl: productUrl ?? "",
       salesCommission: stringifyFieldValue(values.salesCommission),
       coupangProductCost: stringifyFieldValue(values.coupangProductCost),
       inboundOutboundShippingFee: stringifyFieldValue(
@@ -161,7 +203,19 @@ export function PopupHomePage(): ReactElement {
     setCalculationResult(null);
 
     try {
-      await updateSettings(normalizedValues);
+      await Promise.all([
+        updateSettings({
+          productionCostCurrency: normalizedValues.productionCostCurrency,
+          productionCost: normalizedValues.productionCost,
+          productUrl: normalizedValues.productUrl,
+          salesCommission: normalizedValues.salesCommission,
+          coupangProductCost: normalizedValues.coupangProductCost,
+          inboundOutboundShippingFee:
+            normalizedValues.inboundOutboundShippingFee,
+          exchangeRate: normalizedValues.exchangeRate,
+        }),
+        savePopupMarginDraft(normalizedValues),
+      ]);
       form.setInitialValues(normalizedValues);
       form.setValues(normalizedValues);
       form.resetDirty();
@@ -175,7 +229,7 @@ export function PopupHomePage(): ReactElement {
           inputs: {
             productionCostCurrency: values.productionCostCurrency,
             productionCost,
-            productUrl: values.productUrl.trim(),
+            productUrl: normalizedValues.productUrl,
             salesCommission,
             coupangProductCost,
             inboundOutboundShippingFee,
@@ -209,7 +263,19 @@ export function PopupHomePage(): ReactElement {
     setCalculationResult(null);
 
     try {
-      await updateSettings(defaultSavedValues);
+      await Promise.all([
+        updateSettings({
+          productionCostCurrency: defaultSavedValues.productionCostCurrency,
+          productionCost: defaultSavedValues.productionCost,
+          productUrl: defaultSavedValues.productUrl,
+          salesCommission: defaultSavedValues.salesCommission,
+          coupangProductCost: defaultSavedValues.coupangProductCost,
+          inboundOutboundShippingFee:
+            defaultSavedValues.inboundOutboundShippingFee,
+          exchangeRate: defaultSavedValues.exchangeRate,
+        }),
+        savePopupMarginDraft(defaultFormValues),
+      ]);
       setProductionCostCurrency(defaultFormValues.productionCostCurrency);
       form.setInitialValues(defaultFormValues);
       form.setValues(defaultFormValues);
@@ -268,7 +334,7 @@ export function PopupHomePage(): ReactElement {
         >
           <Stack gap={0} h="100%" justify="center">
             <Title fw={600} order={4}>
-              마진율 및 ROAS 계산
+              마진율 계산기
             </Title>
             <Text size="sm">계산에 필요한 정보를 입력해주세요.</Text>
             <Group gap="xs" justify="center" mt="xs">
@@ -302,7 +368,7 @@ export function PopupHomePage(): ReactElement {
         <PopupHomeFormCard
           feedback={feedback}
           form={form}
-          isSubmitting={isSubmitting}
+          isSubmitting={isSubmitting || !isDraftReady}
           productionCostCurrency={productionCostCurrency}
           onProductionCostCurrencyChange={handleProductionCostCurrencyChange}
           onSubmit={handleCalculate}
