@@ -16,9 +16,11 @@ import {
   Text,
   TextInput,
   Title,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconCloudDownload,
+  IconDownload,
   IconExternalLink,
   IconRefresh,
   IconTrash,
@@ -36,6 +38,7 @@ import {
 } from '../model/abrs-ledger-batch-cache';
 import {
   clearAbrsLedgerBatch,
+  downloadCachedAbrsLedgerFile,
   downloadAllAbrsLedgerFiles,
   getAbrsLedgerBatch,
   getAbrsLedgerSelectedTargetDate,
@@ -69,6 +72,7 @@ const AUTO_DOWNLOADABLE_SLOTS = new Set<AbrsCoupangLedgerDownloadSlot>([
   'inventoryHealth',
   'salesStatistics',
   'dailySettlement',
+  'productList',
 ]);
 
 function isAutoDownloadableSlot(
@@ -401,6 +405,28 @@ export function AbrsLedgerImportCard(): ReactElement {
     }
   };
 
+  const handleDownloadCachedFile = async (slot: AbrsLedgerFileSlot) => {
+    setFeedback(null);
+
+    try {
+      const result = await downloadCachedAbrsLedgerFile({ targetDate, slot });
+      setFeedback({
+        color: 'green',
+        title: '파일 다운로드 시작',
+        message: `${result.fileName} 파일 다운로드를 시작했습니다.`,
+      });
+    } catch (error) {
+      setFeedback({
+        color: 'red',
+        title: '파일 다운로드 실패',
+        message:
+          error instanceof Error
+            ? error.message
+            : '저장된 장부 파일을 다운로드하지 못했습니다.',
+      });
+    }
+  };
+
   return (
     <Paper mt="md" p="lg" radius="xl" shadow="sm" withBorder>
       <Stack gap="md">
@@ -470,19 +496,36 @@ export function AbrsLedgerImportCard(): ReactElement {
                   </Stack>
                   <Group gap="xs" wrap="nowrap">
                     {downloadableSlot ? (
-                      <Button
-                        aria-label={`${row.label} Wing 파일 가져오기`}
-                        disabled={downloadingAll || downloadingSlot !== null}
-                        loading={downloadingSlot === row.slot}
-                        onClick={() => {
-                          void handleDownloadFromCoupang(downloadableSlot);
-                        }}
-                        radius="md"
-                        size="compact-xs"
-                        variant="light"
-                      >
-                        <IconCloudDownload size={14} />
-                      </Button>
+                      <Tooltip label="Coupang에서 가져오기">
+                        <Button
+                          aria-label={`${row.label} Coupang에서 가져오기`}
+                          disabled={downloadingAll || downloadingSlot !== null}
+                          loading={downloadingSlot === row.slot}
+                          onClick={() => {
+                            void handleDownloadFromCoupang(downloadableSlot);
+                          }}
+                          radius="md"
+                          size="compact-xs"
+                          variant="light"
+                        >
+                          <IconCloudDownload size={14} />
+                        </Button>
+                      </Tooltip>
+                    ) : null}
+                    {entry ? (
+                      <Tooltip label="저장된 XLSX 다운로드">
+                        <Button
+                          aria-label={`${row.label} 저장 파일 다운로드`}
+                          onClick={() => {
+                            void handleDownloadCachedFile(row.slot);
+                          }}
+                          radius="md"
+                          size="compact-xs"
+                          variant="subtle"
+                        >
+                          <IconDownload size={14} />
+                        </Button>
+                      </Tooltip>
                     ) : null}
                     <Badge color={entry ? 'teal' : 'gray'} radius="xl" variant="light">
                       {entry ? 'OK' : row.required ? 'Need' : 'Optional'}

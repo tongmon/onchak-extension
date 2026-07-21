@@ -16,6 +16,7 @@ test('runtime message contracts expose persistent ABRS ledger batch actions', as
     'abrs/save-ledger-batch-files',
     'abrs/clear-ledger-batch',
     'abrs/download-all-ledger-files',
+    'abrs/download-cached-ledger-file',
     'abrs/get-ledger-target-date',
     'abrs/save-ledger-target-date',
   ]) {
@@ -31,12 +32,28 @@ test('background runtime persists ABRS batches and queries non-active Coupang ta
   const router = await source(
     '../src/app/entrypoints/background/runtime-router.ts',
   );
+  const rowDownload = await source(
+    '../src/pages/abrs-automation/api/download-abrs-coupang-ledger-file.ts',
+  );
 
   assert.match(router, /ABRS_LEDGER_BATCH_STORAGE_PREFIX/);
   assert.match(router, /chrome\.storage\.local/);
   assert.match(router, /chrome\.tabs\.query/);
   assert.match(router, /handleDownloadAllAbrsLedgerFiles/);
   assert.match(router, /abrs\/download-all-ledger-files/);
+  assert.match(router, /chrome\.downloads\.download/);
+  assert.match(router, /handleDownloadCachedAbrsLedgerFile/);
+  assert.match(
+    router,
+    /handleDownloadActiveTabAbrsLedgerFile[\s\S]*downloadAbrsLedgerSlot\(payload\.slot, payload\.targetDate\)/,
+  );
+  assert.match(
+    router,
+    /fallbackTab[\s\S]*sendTabMessage\(fallbackTab\.id/,
+  );
+  assert.match(rowDownload, /chrome\.tabs\.query/);
+  assert.match(rowDownload, /sendTabMessage\(compatibleTab\.id/);
+  assert.match(rowDownload, /sendRuntimeMessage/);
 });
 
 test('background runtime persists the selected ABRS target date', async () => {

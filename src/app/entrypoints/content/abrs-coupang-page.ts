@@ -31,6 +31,24 @@ interface RequestAutoDownloadResponse {
   requestId?: number | string;
 }
 
+interface ProductListDownloadRequest {
+  requestType: 'VENDOR_INVENTORY_ITEM';
+  selectedTypes: string[];
+  comment: string;
+  fileDescription: string;
+  productSearchV2Condition: Record<string, unknown>;
+}
+
+interface ProductListDownloadItem {
+  sellerRequestDownloadExcelId?: number | string;
+  status?: string;
+  fileDescription?: string;
+}
+
+interface ProductListDownloadListResponse {
+  result?: ProductListDownloadItem[];
+}
+
 const XLSX_MIME_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const ADS_LOGIN_REQUIRED_MESSAGE =
@@ -46,6 +64,16 @@ const SALES_CHECK_DOWNLOADABLE_PATH =
   '/fcc/download-manager/check-downloadable';
 
 const SALES_DOWNLOAD_PATH = '/fcc/download-manager/download';
+
+const PRODUCT_LIST_REQUEST_TYPE = 'VENDOR_INVENTORY_ITEM';
+const PRODUCT_LIST_VALIDATE_PATH =
+  '/tenants/seller-web/excel/request/download/create/validate';
+const PRODUCT_LIST_CREATE_PATH =
+  '/tenants/seller-web/excel/request/download/create/vendor-inventory/all';
+const PRODUCT_LIST_STATUS_PATH =
+  '/tenants/seller-web/excel/request/download/list';
+const PRODUCT_LIST_DOWNLOAD_PATH =
+  '/tenants/seller-web/excel/request/download/file';
 
 const ADS_REPORTING_GRAPHQL_PATH = '/marketing-reporting/v2/graphql';
 
@@ -278,6 +306,48 @@ export function createSalesStatisticsAutoDownloadForm(
   return form;
 }
 
+export function createProductListDownloadRequest(
+  requestedAt = new Date(),
+): ProductListDownloadRequest {
+  const compactDate = [
+    String(requestedAt.getFullYear()).slice(-2),
+    String(requestedAt.getMonth() + 1).padStart(2, '0'),
+    String(requestedAt.getDate()).padStart(2, '0'),
+  ].join('');
+
+  return {
+    requestType: PRODUCT_LIST_REQUEST_TYPE,
+    selectedTypes: [],
+    comment: `가격_재고_판매상태 변경(${compactDate})`,
+    fileDescription: `price_inventory_${compactDate}`,
+    productSearchV2Condition: {
+      searchKeywordType: 'ALL',
+      searchKeywords: '',
+      salesMethod: 'ALL',
+      productStatus: ['ALL'],
+      stockSearchType: 'ALL',
+      shippingFeeSearchType: 'ALL',
+      displayCategoryCodes: [],
+      listingStartTime: null,
+      listingEndTime: null,
+      saleEndDateSearchType: 'ALL',
+      bundledShippingSearchType: 'ALL',
+      displayDeletedProduct: false,
+      shippingMethod: 'ALL',
+      exposureStatus: 'ALL',
+      sortMethod: 'SORT_BY_ITEM_LEVEL_UNIT_SOLD',
+      countPerPage: 50,
+      page: 1,
+      locale: 'ko_KR',
+      coupangAttributeOptimized: false,
+      upBundleSearchOption: 'ALL',
+      exposureStatuses: [],
+      qualityEnhanceTypes: [],
+      totalCount: 0,
+    },
+  };
+}
+
 export function createDailySettlementGraphqlRequest(
   targetDate: string,
 ): Record<string, unknown> {
@@ -461,6 +531,92 @@ async function downloadSalesStatisticsFile(
   );
 }
 
+async function requestProductListDownload(
+  request: ProductListDownloadRequest,
+): Promise<void> {
+  const validationUrl = new URL(PRODUCT_LIST_VALIDATE_PATH, window.location.origin);
+  validationUrl.searchParams.set('requestType', PRODUCT_LIST_REQUEST_TYPE);
+  const validationResponse = await fetch(validationUrl, {
+    credentials: 'include',
+  });
+
+  if (!validationResponse.ok) {
+    throw new Error(`상품 리스트 Excel 요청 확인 실패: ${validationResponse.status}`);
+  }
+
+  const response = await fetch(PRODUCT_LIST_CREATE_PATH, {
+    method: 'POST',
+    credentials: 'include',
+    body: JSON.stringify(request),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`상품 리스트 Excel 생성 요청 실패: ${response.status}`);
+  }
+}
+
+async function waitForProductListDownloadId(
+  fileDescription: string,
+): Promise<string> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const statusUrl = new URL(PRODUCT_LIST_STATUS_PATH, window.location.origin);
+    statusUrl.searchParams.set('requestType', PRODUCT_LIST_REQUEST_TYPE);
+    statusUrl.searchParams.set('page', '1');
+    statusUrl.searchParams.set('countPerPage', '10');
+    const response = await fetch(statusUrl, {
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`상품 리스트 Excel 상태 확인 실패: ${response.status}`);
+    }
+
+    const payload = (await response.json()) as ProductListDownloadListResponse;
+    const requestedItems = (payload.result ?? [])
+      .filter((item) => item.fileDescription === fileDescription)
+      .sort(
+        (left, right) =>
+          Number(right.sellerRequestDownloadExcelId ?? 0) -
+          Number(left.sellerRequestDownloadExcelId ?? 0),
+      );
+    const latestItem = requestedItems[0];
+
+    if (latestItem?.status === 'COMPLETED' && latestItem.sellerRequestDownloadExcelId) {
+      return String(latestItem.sellerRequestDownloadExcelId);
+    }
+
+    if (latestItem?.status === 'FAILED') {
+      throw new Error('상품 리스트 Excel 생성에 실패했습니다.');
+    }
+
+    await delay(2000);
+  }
+
+  throw new Error('상품 리스트 Excel 생성이 제한 시간 안에 완료되지 않았습니다.');
+}
+
+async function downloadProductListFile(): Promise<
+  Omit<AbrsCoupangLedgerDownload, 'slot'>
+> {
+  const request = createProductListDownloadRequest();
+  await requestProductListDownload(request);
+  const downloadId = await waitForProductListDownloadId(request.fileDescription);
+  const downloadUrl = new URL(PRODUCT_LIST_DOWNLOAD_PATH, window.location.origin);
+  downloadUrl.searchParams.set('requestType', PRODUCT_LIST_REQUEST_TYPE);
+  downloadUrl.searchParams.set('sellerRequestDownloadExcelId', downloadId);
+  const response = await fetch(downloadUrl, {
+    credentials: 'include',
+  });
+
+  return readResponseAsDownload(response, `${request.fileDescription}.xlsx`);
+}
+
 export function getDailySettlementFromGraphqlResponse(
   payload: unknown,
 ): DailySettlementPayload {
@@ -627,6 +783,16 @@ export async function downloadAbrsCoupangLedgerFile(
       return {
         slot: request.slot,
         ...(await downloadDailySettlementFile(request.targetDate)),
+      };
+
+    case 'productList':
+      if (!isWingHost(window.location.hostname)) {
+        throw new Error('상품 리스트는 Coupang Wing 탭에서만 자동 가져오기를 실행할 수 있습니다.');
+      }
+
+      return {
+        slot: request.slot,
+        ...(await downloadProductListFile()),
       };
 
     default:

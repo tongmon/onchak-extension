@@ -51,7 +51,8 @@ export interface AbrsCoupangPageSnapshot {
 export type AbrsCoupangLedgerDownloadSlot =
   | 'inventoryHealth'
   | 'salesStatistics'
-  | 'dailySettlement';
+  | 'dailySettlement'
+  | 'productList';
 
 export type AbrsLedgerFileSlot = AbrsCoupangLedgerDownloadSlot | 'productList';
 
@@ -153,6 +154,16 @@ export interface RuntimeMessageMap {
     response: {
       batch: AbrsLedgerBatch;
       statuses: AbrsLedgerDownloadSlotStatus[];
+    };
+  };
+  'abrs/download-cached-ledger-file': {
+    request: {
+      targetDate: string;
+      slot: AbrsLedgerFileSlot;
+    };
+    response: {
+      downloadId: number;
+      fileName: string;
     };
   };
   'abrs/get-ledger-target-date': {

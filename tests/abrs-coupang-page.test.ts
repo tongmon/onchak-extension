@@ -5,6 +5,7 @@ import {
   createDailySettlementGraphqlRequest,
   createDailySettlementWorkbookFileName,
   createInventoryHealthExcelRequest,
+  createProductListDownloadRequest,
   createSalesStatisticsAutoDownloadForm,
   detectAbrsCoupangSurface,
   extractFilenameFromContentDisposition,
@@ -77,6 +78,19 @@ test('createSalesStatisticsAutoDownloadForm creates Coupang download manager pay
     actionedOn: false,
     rfmFlag: true,
   });
+});
+
+test('createProductListDownloadRequest matches Coupang Wing price inventory request', () => {
+  const request = createProductListDownloadRequest(
+    new Date('2026-07-21T12:00:00+09:00'),
+  );
+
+  assert.equal(request.requestType, 'VENDOR_INVENTORY_ITEM');
+  assert.equal(request.fileDescription, 'price_inventory_260721');
+  assert.equal(request.comment, '가격_재고_판매상태 변경(260721)');
+  assert.deepEqual(request.selectedTypes, []);
+  assert.deepEqual(request.productSearchV2Condition.productStatus, ['ALL']);
+  assert.equal(request.productSearchV2Condition.locale, 'ko_KR');
 });
 
 test('extractFilenameFromContentDisposition supports Coupang xlsx attachment names', () => {

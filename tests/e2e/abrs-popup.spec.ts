@@ -226,6 +226,76 @@ test('ABRS popup restores cached workbook attachments after popup remount', asyn
   }
 });
 
+test('ABRS popup downloads a cached workbook from its row action', async ({}, testInfo) => {
+  const context = await chromium.launchPersistentContext(
+    testInfo.outputPath('cached-download-profile'),
+    {
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionPath}`,
+        `--load-extension=${extensionPath}`,
+      ],
+    },
+  );
+
+  try {
+    const page = await openExtensionPopup(context);
+    await page.getByLabel('장부 날짜').fill('2026-04-18');
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: '파일 추가' }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({
+      name: 'inventory_health_sku_info_20260616220816.xlsx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: Buffer.from('xlsx'),
+    });
+
+    await page
+      .getByRole('button', { name: '재고 현황 저장 파일 다운로드' })
+      .click();
+
+    await expect(page.getByText('파일 다운로드 시작')).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const downloads = await chrome.downloads.search({});
+          return downloads.some(
+            (download) =>
+              download.state === 'complete' && download.totalBytes === 4,
+          );
+        }),
+      )
+      .toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
+test('ABRS popup exposes optional Coupang product list collection', async ({}, testInfo) => {
+  const context = await chromium.launchPersistentContext(
+    testInfo.outputPath('product-list-profile'),
+    {
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionPath}`,
+        `--load-extension=${extensionPath}`,
+      ],
+    },
+  );
+
+  try {
+    const page = await openExtensionPopup(context);
+
+    await expect(
+      page.getByRole('button', { name: '상품 리스트 Coupang에서 가져오기' }),
+    ).toBeVisible();
+    await expect(page.getByText('Optional')).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test('ABRS popup restores the selected ledger date after losing foreground', async ({}, testInfo) => {
   const context = await chromium.launchPersistentContext(
     testInfo.outputPath('selected-date-profile'),

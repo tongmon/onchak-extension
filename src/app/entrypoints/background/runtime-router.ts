@@ -34,6 +34,8 @@ const ABRS_LEDGER_DOWNLOAD_SLOTS: AbrsCoupangLedgerDownloadSlot[] = [
 ];
 const WING_LEDGER_START_URL =
   'https://wing.coupang.com/tenants/rfm-inventory/management/list';
+const WING_PRODUCT_LIST_START_URL =
+  'https://wing.coupang.com/vendor-inventory/list';
 const ADS_LEDGER_START_URL =
   'https://advertising.coupang.com/marketing/dashboard';
 const COUPANG_AUTH_HOST = 'xauth.coupang.com';
@@ -230,16 +232,26 @@ async function handleGetActiveTabAbrsCoupangPage(): Promise<
 async function handleDownloadActiveTabAbrsLedgerFile(
   payload: RuntimeMessageMap['abrs/download-active-tab-ledger-file']['request'],
 ): Promise<RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']> {
-  const activeTab = await getCurrentActiveTab();
+  const result = await downloadAbrsLedgerSlot(payload.slot, payload.targetDate);
 
-  if (!activeTab?.id) {
-    throw new Error('현재 활성 탭을 찾을 수 없습니다.');
+  if (result.download) {
+    return result.download;
   }
 
-  return sendTabMessageWithRecovery(activeTab.id, {
-    type: 'abrs/download-ledger-file',
-    payload,
-  });
+  const fallbackTab = await findAbrsTabForSlot(payload.slot);
+
+  if (fallbackTab?.id) {
+    try {
+      return await sendTabMessage(fallbackTab.id, {
+        type: 'abrs/download-ledger-file',
+        payload,
+      });
+    } catch {
+      // Preserve the first error because it includes login and tab readiness guidance.
+    }
+  }
+
+  throw new Error(result.status.error ?? 'Coupang 파일을 가져오지 못했습니다.');
 }
 
 function createAbrsLedgerBatchStorageKey(targetDate: string): string {
@@ -469,9 +481,44 @@ function isTabUsableForAbrsSlot(
 }
 
 function getAbrsSlotStartUrl(slot: AbrsCoupangLedgerDownloadSlot): string {
-  return slot === 'dailySettlement'
-    ? ADS_LEDGER_START_URL
+  if (slot === 'dailySettlement') {
+    return ADS_LEDGER_START_URL;
+  }
+
+  return slot === 'productList'
+    ? WING_PRODUCT_LIST_START_URL
     : WING_LEDGER_START_URL;
+}
+
+function safeDownloadFileName(fileName: string): string {
+  const normalized = fileName.split(/[\\/]/).pop()?.trim();
+
+  if (!normalized) {
+    throw new Error('다운로드할 장부 파일명이 올바르지 않습니다.');
+  }
+
+  return normalized;
+}
+
+async function handleDownloadCachedAbrsLedgerFile(
+  payload: RuntimeMessageMap['abrs/download-cached-ledger-file']['request'],
+): Promise<RuntimeMessageMap['abrs/download-cached-ledger-file']['response']> {
+  const batch = await getStoredAbrsLedgerBatch(payload.targetDate);
+  const entry = batch.entries.find((candidate) => candidate.slot === payload.slot);
+
+  if (!entry) {
+    throw new Error('저장된 장부 파일을 찾지 못했습니다.');
+  }
+
+  const fileName = safeDownloadFileName(entry.fileName);
+  const downloadId = await chrome.downloads.download({
+    url: `data:${entry.mimeType};base64,${entry.base64}`,
+    filename: fileName,
+    conflictAction: 'uniquify',
+    saveAs: false,
+  });
+
+  return { downloadId, fileName };
 }
 
 async function findAbrsTabForSlot(
@@ -827,6 +874,7 @@ async function handleRuntimeMessage(
   | RuntimeMessageMap['abrs/save-ledger-batch-files']['response']
   | RuntimeMessageMap['abrs/clear-ledger-batch']['response']
   | RuntimeMessageMap['abrs/download-all-ledger-files']['response']
+  | RuntimeMessageMap['abrs/download-cached-ledger-file']['response']
   | RuntimeMessageMap['abrs/get-ledger-target-date']['response']
   | RuntimeMessageMap['abrs/save-ledger-target-date']['response']
 > {
@@ -892,6 +940,15 @@ async function handleRuntimeMessage(
 
       return handleDownloadAllAbrsLedgerFiles(
         (message as RuntimeMessage<'abrs/download-all-ledger-files'>).payload,
+      );
+
+    case 'abrs/download-cached-ledger-file':
+      if (!message.payload) {
+        throw new Error('Missing payload for abrs/download-cached-ledger-file.');
+      }
+
+      return handleDownloadCachedAbrsLedgerFile(
+        (message as RuntimeMessage<'abrs/download-cached-ledger-file'>).payload,
       );
 
     case 'abrs/get-ledger-target-date':

@@ -44,6 +44,16 @@ export function downloadAllAbrsLedgerFiles(
   });
 }
 
+export function downloadCachedAbrsLedgerFile(params: {
+  targetDate: string;
+  slot: AbrsLedgerPersistedEntry['slot'];
+}): Promise<{ downloadId: number; fileName: string }> {
+  return sendRuntimeMessage({
+    type: 'abrs/download-cached-ledger-file',
+    payload: params,
+  });
+}
+
 export function getAbrsLedgerSelectedTargetDate(
   fallbackDate: string,
 ): Promise<AbrsLedgerSelectedTargetDate> {
