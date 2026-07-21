@@ -132,6 +132,47 @@ test('ABRS popup hides missing-file validation after successful server upload cl
   }
 });
 
+test('ABRS popup clears an expired OMS session after an unauthorized upload', async ({}, testInfo) => {
+  const context = await chromium.launchPersistentContext(
+    testInfo.outputPath('unauthorized-profile'),
+    {
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionPath}`,
+        `--load-extension=${extensionPath}`,
+      ],
+    },
+  );
+
+  await context.route('http://localhost:8080/api/ledger/imports', (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Unauthorized' }),
+    }),
+  );
+
+  try {
+    const page = await openExtensionPopup(context);
+    await page.getByLabel('장부 날짜').fill('2026-04-18');
+    await attachAbrsWorkbooks(page);
+
+    await page.getByRole('button', { name: '서버 업로드' }).click();
+
+    await expect(page.getByRole('button', { name: '로그인' })).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(async () => {
+          const stored = await chrome.storage.local.get(['authSession']);
+          return stored.authSession ?? null;
+        }),
+      )
+      .toBeNull();
+  } finally {
+    await context.close();
+  }
+});
+
 test('ABRS popup restores cached workbook attachments after popup remount', async ({}, testInfo) => {
   const context = await chromium.launchPersistentContext(
     testInfo.outputPath('persistent-profile'),

@@ -30,6 +30,9 @@ const MISSING_LOGIN_SESSION_MESSAGE =
 const MISSING_ACCESS_TOKEN_MESSAGE =
   '인증 토큰을 찾을 수 없습니다. 다시 로그인한 뒤 업로드해주세요.';
 
+const EXPIRED_LOGIN_SESSION_MESSAGE =
+  '로그인 세션이 만료되었습니다. 다시 로그인한 뒤 업로드해주세요.';
+
 async function parseResponseJson(response: Response): Promise<unknown> {
   const text = await response.text();
 
@@ -86,6 +89,11 @@ export async function uploadAbrsLedgerImport({
   const responsePayload = await parseResponseJson(response);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      await authStorage.clearSession();
+      throw new Error(EXPIRED_LOGIN_SESSION_MESSAGE);
+    }
+
     throw new Error(
       extractAbrsLedgerImportErrorMessage(
         responsePayload,
