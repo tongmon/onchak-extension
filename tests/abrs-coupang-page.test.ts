@@ -93,6 +93,17 @@ test('createProductListDownloadRequest matches Coupang Wing price inventory requ
   assert.equal(request.productSearchV2Condition.locale, 'ko_KR');
 });
 
+test('product list download allows Coupang up to three minutes to build the workbook', async () => {
+  const source = await readFile(
+    new URL('../src/app/entrypoints/content/abrs-coupang-page.ts', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /PRODUCT_LIST_DOWNLOAD_POLL_ATTEMPTS = 90/);
+  assert.match(source, /attempt < PRODUCT_LIST_DOWNLOAD_POLL_ATTEMPTS/);
+  assert.match(source, /await delay\(2000\)/);
+});
+
 test('extractFilenameFromContentDisposition supports Coupang xlsx attachment names', () => {
   assert.equal(
     extractFilenameFromContentDisposition(

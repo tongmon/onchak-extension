@@ -47,12 +47,11 @@ test('background runtime persists ABRS batches and queries non-active Coupang ta
     router,
     /handleDownloadActiveTabAbrsLedgerFile[\s\S]*downloadAbrsLedgerSlot\(payload\.slot, payload\.targetDate\)/,
   );
-  assert.match(
-    router,
-    /fallbackTab[\s\S]*sendTabMessage\(fallbackTab\.id/,
-  );
+  assert.doesNotMatch(router, /fallbackTab[\s\S]*sendTabMessage\(fallbackTab\.id/);
   assert.match(rowDownload, /chrome\.tabs\.query/);
   assert.match(rowDownload, /sendTabMessage\(compatibleTab\.id/);
+  assert.match(rowDownload, /isMissingReceiverError/);
+  assert.match(rowDownload, /if \(!isMissingReceiverError\(error\)\) \{\s*throw error;/);
   assert.match(rowDownload, /sendRuntimeMessage/);
 });
 

@@ -21,6 +21,15 @@ function supportsSlot(urlValue: string | undefined, slot: AbrsCoupangLedgerDownl
   }
 }
 
+function isMissingReceiverError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+
+  return (
+    message.includes('Receiving end does not exist') ||
+    message.includes('Could not establish connection')
+  );
+}
+
 export async function downloadAbrsCoupangLedgerFileFromActiveTab(params: {
   slot: AbrsCoupangLedgerDownloadSlot;
   targetDate: string;
@@ -37,7 +46,11 @@ export async function downloadAbrsCoupangLedgerFileFromActiveTab(params: {
         type: 'abrs/download-ledger-file',
         payload: params,
       });
-    } catch {
+    } catch (error) {
+      if (!isMissingReceiverError(error)) {
+        throw error;
+      }
+
       download = undefined;
     }
   }

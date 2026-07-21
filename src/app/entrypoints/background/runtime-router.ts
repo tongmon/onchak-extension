@@ -238,19 +238,6 @@ async function handleDownloadActiveTabAbrsLedgerFile(
     return result.download;
   }
 
-  const fallbackTab = await findAbrsTabForSlot(payload.slot);
-
-  if (fallbackTab?.id) {
-    try {
-      return await sendTabMessage(fallbackTab.id, {
-        type: 'abrs/download-ledger-file',
-        payload,
-      });
-    } catch {
-      // Preserve the first error because it includes login and tab readiness guidance.
-    }
-  }
-
   throw new Error(result.status.error ?? 'Coupang 파일을 가져오지 못했습니다.');
 }
 

@@ -74,6 +74,7 @@ const PRODUCT_LIST_STATUS_PATH =
   '/tenants/seller-web/excel/request/download/list';
 const PRODUCT_LIST_DOWNLOAD_PATH =
   '/tenants/seller-web/excel/request/download/file';
+const PRODUCT_LIST_DOWNLOAD_POLL_ATTEMPTS = 90;
 
 const ADS_REPORTING_GRAPHQL_PATH = '/marketing-reporting/v2/graphql';
 
@@ -561,7 +562,11 @@ async function requestProductListDownload(
 async function waitForProductListDownloadId(
   fileDescription: string,
 ): Promise<string> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < PRODUCT_LIST_DOWNLOAD_POLL_ATTEMPTS;
+    attempt += 1
+  ) {
     const statusUrl = new URL(PRODUCT_LIST_STATUS_PATH, window.location.origin);
     statusUrl.searchParams.set('requestType', PRODUCT_LIST_REQUEST_TYPE);
     statusUrl.searchParams.set('page', '1');
