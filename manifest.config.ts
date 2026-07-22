@@ -25,15 +25,22 @@ export default defineManifest({
     default_popup: "src/app/entrypoints/popup/index.html",
   },
   options_page: "src/app/entrypoints/options/index.html",
-  permissions: ["storage", "scripting", "activeTab", "tabs", "downloads"],
-  host_permissions: ["https://*/*", "http://*/*"],
+  permissions: ["storage", "scripting", "activeTab"],
+  host_permissions: [
+    "https://zephlyglobal.com/*",
+    "https://wing.coupang.com/*",
+    "https://advertising.coupang.com/*",
+  ],
   background: {
     service_worker: "src/app/entrypoints/background/index.ts",
     type: "module",
   },
   content_scripts: [
     {
-      matches: ["https://*/*", "http://*/*"],
+      matches: [
+        "https://wing.coupang.com/*",
+        "https://advertising.coupang.com/*",
+      ],
       js: ["src/app/entrypoints/content/index.ts"],
       run_at: "document_idle",
     },
