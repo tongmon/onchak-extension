@@ -1,16 +1,20 @@
 import type { FormEvent, ReactElement } from "react";
 import {
+  ActionIcon,
   Alert,
   Anchor,
   Button,
+  Group,
   NumberInput,
   Paper,
   SegmentedControl,
   Stack,
   Text,
   TextInput,
+  Tooltip,
 } from "@mantine/core";
 import type { UseFormReturnType } from "@mantine/form";
+import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { DEFAULT_EXCHANGE_RATE } from "@/entities/settings";
 import type {
   FeedbackState,
@@ -32,8 +36,11 @@ interface PopupHomeFormCardProps {
   feedback: FeedbackState | null;
   form: UseFormReturnType<PopupFormValues>;
   isSubmitting: boolean;
+  productUrls: string[];
   productionCostCurrency: ProductionCostCurrency;
+  onAddProductUrl: () => void;
   onProductionCostCurrencyChange: (value: ProductionCostCurrency) => void;
+  onRemoveProductUrl: (productUrl: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
 
@@ -41,12 +48,14 @@ export function PopupHomeFormCard({
   feedback,
   form,
   isSubmitting,
+  productUrls,
   productionCostCurrency,
+  onAddProductUrl,
   onProductionCostCurrencyChange,
+  onRemoveProductUrl,
   onSubmit,
 }: PopupHomeFormCardProps): ReactElement {
-  const productionCostSuffix =
-    productionCostCurrency === "cny" ? "위안" : "원";
+  const productionCostSuffix = productionCostCurrency === "cny" ? "위안" : "원";
   const productionCostPlaceholder =
     productionCostCurrency === "cny" ? "예: 100" : "예: 35200";
 
@@ -83,16 +92,80 @@ export function PopupHomeFormCard({
             {...form.getInputProps("productionCost")}
           />
 
-          <TextInput
-            key={form.key("productUrl")}
-            autoComplete="url"
-            disabled={isSubmitting}
-            inputMode="url"
-            label="원가 사이트 링크"
-            placeholder="https://..."
-            radius="md"
-            {...form.getInputProps("productUrl")}
-          />
+          <Stack gap="xs">
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <TextInput
+                key={form.key("productUrlInput")}
+                autoComplete="url"
+                disabled={isSubmitting}
+                flex={1}
+                inputMode="url"
+                label="원가 사이트 링크"
+                placeholder="https://..."
+                radius="md"
+                {...form.getInputProps("productUrlInput")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onAddProductUrl();
+                  }
+                }}
+              />
+              <Tooltip label="원가 사이트 링크 추가" withArrow>
+                <ActionIcon
+                  aria-label="원가 사이트 링크 추가"
+                  disabled={isSubmitting}
+                  onClick={onAddProductUrl}
+                  radius="md"
+                  size={36}
+                  type="button"
+                  variant="filled"
+                >
+                  <IconPlus size={18} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+
+            {productUrls.length > 0 ? (
+              <Stack gap={4}>
+                {productUrls.map((productUrl, index) => (
+                  <Group
+                    key={productUrl}
+                    gap="xs"
+                    justify="space-between"
+                    wrap="nowrap"
+                  >
+                    <Anchor
+                      flex={1}
+                      href={productUrl}
+                      rel="noreferrer"
+                      size="xs"
+                      target="_blank"
+                      title={productUrl}
+                      truncate="end"
+                    >
+                      {index + 1}. {productUrl}
+                    </Anchor>
+                    <Tooltip label="원가 사이트 링크 삭제" withArrow>
+                      <ActionIcon
+                        aria-label={`원가 사이트 링크 ${index + 1} 삭제`}
+                        color="red"
+                        disabled={isSubmitting}
+                        onClick={() => {
+                          onRemoveProductUrl(productUrl);
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="subtle"
+                      >
+                        <IconTrash size={15} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                ))}
+              </Stack>
+            ) : null}
+          </Stack>
 
           <NumberInput
             key={form.key("salesCommission")}

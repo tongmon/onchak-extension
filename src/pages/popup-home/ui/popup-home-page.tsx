@@ -14,6 +14,7 @@ import {
   type PopupMarginCalculationResult,
 } from "../model/popup-margin-result";
 import {
+  appendProductUrl,
   createInitialPopupFormValues,
   getAppliedExchangeRate,
   getPopupFeedbackState,
@@ -45,6 +46,7 @@ export function PopupHomePage(): ReactElement {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isDraftReady, setIsDraftReady] = useState(false);
+  const [productUrls, setProductUrls] = useState<string[]>([]);
 
   const form = useForm<PopupFormValues>({
     mode: "uncontrolled",
@@ -52,6 +54,7 @@ export function PopupHomePage(): ReactElement {
       productionCostCurrency: settings.productionCostCurrency,
       productionCost: settings.productionCost,
       productUrl: settings.productUrl,
+      productUrls: settings.productUrls,
       salesCommission: settings.salesCommission,
       coupangProductCost: settings.coupangProductCost,
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
@@ -90,7 +93,7 @@ export function PopupHomePage(): ReactElement {
         isBlankNumberInput(value) || normalizeExchangeRateInput(value) !== null
           ? null
           : "배송 대행지 적용 환율을 0보다 큰 숫자로 입력해주세요.",
-      productUrl: (value) =>
+      productUrlInput: (value) =>
         !value.trim() || normalizeProductUrl(value) !== null
           ? null
           : "http 또는 https로 시작하는 원가 사이트 링크를 입력해주세요.",
@@ -107,6 +110,7 @@ export function PopupHomePage(): ReactElement {
       productionCostCurrency: settings.productionCostCurrency,
       productionCost: settings.productionCost,
       productUrl: settings.productUrl,
+      productUrls: settings.productUrls,
       salesCommission: settings.salesCommission,
       coupangProductCost: settings.coupangProductCost,
       inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
@@ -120,6 +124,7 @@ export function PopupHomePage(): ReactElement {
         }
 
         setProductionCostCurrency(nextValues.productionCostCurrency);
+        setProductUrls(nextValues.productUrls);
         form.setInitialValues(nextValues);
         form.setValues(nextValues);
         form.resetDirty();
@@ -152,6 +157,7 @@ export function PopupHomePage(): ReactElement {
     settings.productionCostCurrency,
     settings.productionCost,
     settings.productUrl,
+    settings.productUrls,
     settings.salesCommission,
     settings.coupangProductCost,
     settings.inboundOutboundShippingFee,
@@ -168,7 +174,10 @@ export function PopupHomePage(): ReactElement {
     const exchangeRate = isBlankNumberInput(values.exchangeRate)
       ? getAppliedExchangeRate(values.exchangeRate)
       : normalizeExchangeRateInput(values.exchangeRate);
-    const productUrl = normalizeProductUrl(values.productUrl);
+    const appendResult = values.productUrlInput.trim()
+      ? appendProductUrl(values.productUrls, values.productUrlInput)
+      : { error: null, productUrls: values.productUrls };
+    const normalizedProductUrls = appendResult.productUrls;
 
     if (
       productionCost === null ||
@@ -176,12 +185,15 @@ export function PopupHomePage(): ReactElement {
       coupangProductCost === null ||
       inboundOutboundShippingFee === null ||
       exchangeRate === null ||
-      (values.productUrl.trim() && productUrl === null)
+      appendResult.error !== null
     ) {
+      if (appendResult.error) {
+        form.setFieldError("productUrlInput", appendResult.error);
+      }
       setFeedback({
         color: "red",
         title: "입력 오류",
-        message: "숫자 입력값을 다시 확인해주세요.",
+        message: appendResult.error ?? "숫자 입력값을 다시 확인해주세요.",
       });
       return;
     }
@@ -189,7 +201,8 @@ export function PopupHomePage(): ReactElement {
     const normalizedValues = {
       productionCostCurrency: values.productionCostCurrency,
       productionCost: stringifyFieldValue(values.productionCost),
-      productUrl: productUrl ?? "",
+      productUrlInput: "",
+      productUrls: normalizedProductUrls,
       salesCommission: stringifyFieldValue(values.salesCommission),
       coupangProductCost: stringifyFieldValue(values.coupangProductCost),
       inboundOutboundShippingFee: stringifyFieldValue(
@@ -207,7 +220,8 @@ export function PopupHomePage(): ReactElement {
         updateSettings({
           productionCostCurrency: normalizedValues.productionCostCurrency,
           productionCost: normalizedValues.productionCost,
-          productUrl: normalizedValues.productUrl,
+          productUrl: normalizedProductUrls[0] ?? "",
+          productUrls: normalizedProductUrls,
           salesCommission: normalizedValues.salesCommission,
           coupangProductCost: normalizedValues.coupangProductCost,
           inboundOutboundShippingFee:
@@ -216,6 +230,7 @@ export function PopupHomePage(): ReactElement {
         }),
         savePopupMarginDraft(normalizedValues),
       ]);
+      setProductUrls(normalizedProductUrls);
       form.setInitialValues(normalizedValues);
       form.setValues(normalizedValues);
       form.resetDirty();
@@ -229,7 +244,7 @@ export function PopupHomePage(): ReactElement {
           inputs: {
             productionCostCurrency: values.productionCostCurrency,
             productionCost,
-            productUrl: normalizedValues.productUrl,
+            productUrls: normalizedProductUrls,
             salesCommission,
             coupangProductCost,
             inboundOutboundShippingFee,
@@ -250,6 +265,7 @@ export function PopupHomePage(): ReactElement {
       productionCostCurrency: defaultExtensionSettings.productionCostCurrency,
       productionCost: defaultExtensionSettings.productionCost,
       productUrl: defaultExtensionSettings.productUrl,
+      productUrls: defaultExtensionSettings.productUrls,
       salesCommission: defaultExtensionSettings.salesCommission,
       coupangProductCost: defaultExtensionSettings.coupangProductCost,
       inboundOutboundShippingFee:
@@ -268,6 +284,7 @@ export function PopupHomePage(): ReactElement {
           productionCostCurrency: defaultSavedValues.productionCostCurrency,
           productionCost: defaultSavedValues.productionCost,
           productUrl: defaultSavedValues.productUrl,
+          productUrls: defaultSavedValues.productUrls,
           salesCommission: defaultSavedValues.salesCommission,
           coupangProductCost: defaultSavedValues.coupangProductCost,
           inboundOutboundShippingFee:
@@ -277,6 +294,7 @@ export function PopupHomePage(): ReactElement {
         savePopupMarginDraft(defaultFormValues),
       ]);
       setProductionCostCurrency(defaultFormValues.productionCostCurrency);
+      setProductUrls(defaultFormValues.productUrls);
       form.setInitialValues(defaultFormValues);
       form.setValues(defaultFormValues);
       form.resetDirty();
@@ -299,6 +317,42 @@ export function PopupHomePage(): ReactElement {
   ) => {
     setProductionCostCurrency(value);
     form.setFieldValue("productionCostCurrency", value);
+  };
+
+  const handleAddProductUrl = () => {
+    const values = form.getValues();
+    const appendResult = appendProductUrl(
+      values.productUrls,
+      values.productUrlInput,
+    );
+
+    if (appendResult.error) {
+      form.setFieldError("productUrlInput", appendResult.error);
+      return;
+    }
+
+    const nextValues = {
+      ...values,
+      productUrlInput: "",
+      productUrls: appendResult.productUrls,
+    };
+    setProductUrls(appendResult.productUrls);
+    form.clearFieldError("productUrlInput");
+    form.setValues(nextValues);
+  };
+
+  const handleRemoveProductUrl = (productUrl: string) => {
+    const values = form.getValues();
+    const nextProductUrls = values.productUrls.filter(
+      (candidate) => candidate !== productUrl,
+    );
+    const nextValues = {
+      ...values,
+      productUrls: nextProductUrls,
+    };
+    setProductUrls(nextProductUrls);
+    form.clearFieldError("productUrlInput");
+    form.setValues(nextValues);
   };
 
   if (calculationResult) {
@@ -369,8 +423,11 @@ export function PopupHomePage(): ReactElement {
           feedback={feedback}
           form={form}
           isSubmitting={isSubmitting || !isDraftReady}
+          productUrls={productUrls}
           productionCostCurrency={productionCostCurrency}
+          onAddProductUrl={handleAddProductUrl}
           onProductionCostCurrencyChange={handleProductionCostCurrencyChange}
+          onRemoveProductUrl={handleRemoveProductUrl}
           onSubmit={handleCalculate}
         />
         <AbrsLedgerImportCard />

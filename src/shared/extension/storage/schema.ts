@@ -9,6 +9,7 @@ export interface ExtensionSettings {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: string;
   productUrl: string;
+  productUrls: string[];
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
@@ -25,6 +26,7 @@ export const defaultExtensionSettings: ExtensionSettings = {
   productionCostCurrency: "cny",
   productionCost: "",
   productUrl: "",
+  productUrls: [],
   salesCommission: "10.8",
   coupangProductCost: "",
   inboundOutboundShippingFee: "",
@@ -36,8 +38,14 @@ export const defaultExtensionStorage: ExtensionStorageSchema = {
 };
 
 export function normalizeExtensionSettings(
-  input?: (Partial<ExtensionSettings> & { overseasShippingFee?: unknown }) | null,
+  input?:
+    (Partial<ExtensionSettings> & { overseasShippingFee?: unknown }) | null,
 ): ExtensionSettings {
+  const productUrls = normalizeStoredProductUrls(
+    input?.productUrls,
+    input?.productUrl,
+  );
+
   return {
     colorScheme:
       input?.colorScheme === "light" || input?.colorScheme === "dark"
@@ -55,10 +63,8 @@ export function normalizeExtensionSettings(
       typeof input?.productionCost === "string"
         ? input.productionCost
         : defaultExtensionSettings.productionCost,
-    productUrl:
-      typeof input?.productUrl === "string"
-        ? input.productUrl
-        : defaultExtensionSettings.productUrl,
+    productUrl: productUrls[0] ?? defaultExtensionSettings.productUrl,
+    productUrls,
     salesCommission:
       typeof input?.salesCommission === "string" &&
       input.salesCommission.trim() !== ""
@@ -80,4 +86,26 @@ export function normalizeExtensionSettings(
           ? input.overseasShippingFee
           : defaultExtensionSettings.exchangeRate,
   };
+}
+
+function normalizeStoredProductUrls(
+  value: unknown,
+  legacyProductUrl: unknown,
+): string[] {
+  const candidates = Array.isArray(value)
+    ? value
+    : typeof legacyProductUrl === "string"
+      ? [legacyProductUrl]
+      : [];
+
+  return Array.from(
+    new Set(
+      candidates
+        .filter(
+          (candidate): candidate is string => typeof candidate === "string",
+        )
+        .map((candidate) => candidate.trim())
+        .filter(Boolean),
+    ),
+  );
 }

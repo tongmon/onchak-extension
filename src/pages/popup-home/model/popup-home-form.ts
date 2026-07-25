@@ -8,7 +8,8 @@ export type { ProductionCostCurrency };
 export interface PopupFormValues {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: string | number;
-  productUrl: string;
+  productUrlInput: string;
+  productUrls: string[];
   salesCommission: string | number;
   coupangProductCost: string | number;
   inboundOutboundShippingFee: string | number;
@@ -20,6 +21,16 @@ export interface FeedbackState {
   title: string;
   message: string;
 }
+
+export interface ProductUrlAppendResult {
+  error: string | null;
+  productUrls: string[];
+}
+
+export const INVALID_PRODUCT_URL_MESSAGE =
+  'http 또는 https로 시작하는 원가 사이트 링크를 입력해주세요.';
+export const DUPLICATE_PRODUCT_URL_MESSAGE =
+  '이미 추가된 원가 사이트 링크입니다.';
 
 const MISSING_INFO_MESSAGE = '특정 정보를 찾을 수 없습니다.';
 const WRONG_PAGE_MESSAGE =
@@ -34,15 +45,23 @@ export function createInitialPopupFormValues(values: {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: string;
   productUrl: string;
+  productUrls?: string[];
   salesCommission: string;
   coupangProductCost: string;
   inboundOutboundShippingFee: string;
   exchangeRate: string;
 }): PopupFormValues {
+  const productUrls = normalizeProductUrls(
+    Array.isArray(values.productUrls)
+      ? values.productUrls
+      : [values.productUrl],
+  );
+
   return {
     productionCostCurrency: values.productionCostCurrency,
     productionCost: values.productionCost,
-    productUrl: values.productUrl,
+    productUrlInput: '',
+    productUrls,
     salesCommission: values.salesCommission,
     coupangProductCost: values.coupangProductCost,
     inboundOutboundShippingFee: values.inboundOutboundShippingFee,
@@ -66,6 +85,49 @@ export function normalizeProductUrl(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+export function normalizeProductUrls(values: unknown): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      values
+        .filter((value): value is string => typeof value === 'string')
+        .map(normalizeProductUrl)
+        .filter((value): value is string => value !== null),
+    ),
+  );
+}
+
+export function appendProductUrl(
+  productUrls: string[],
+  input: string,
+): ProductUrlAppendResult {
+  const productUrl = normalizeProductUrl(input);
+
+  if (!productUrl) {
+    return {
+      error: INVALID_PRODUCT_URL_MESSAGE,
+      productUrls,
+    };
+  }
+
+  const normalizedProductUrls = normalizeProductUrls(productUrls);
+
+  if (normalizedProductUrls.includes(productUrl)) {
+    return {
+      error: DUPLICATE_PRODUCT_URL_MESSAGE,
+      productUrls: normalizedProductUrls,
+    };
+  }
+
+  return {
+    error: null,
+    productUrls: [...normalizedProductUrls, productUrl],
+  };
 }
 
 export function isBlankNumberInput(value: string | number): boolean {

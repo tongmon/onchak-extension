@@ -1,4 +1,5 @@
 import type { PopupFormValues } from './popup-home-form';
+import { normalizeProductUrls } from './popup-home-form.ts';
 
 export const POPUP_MARGIN_DRAFT_STORAGE_KEY = 'popupMarginCalculatorDraft';
 
@@ -6,7 +7,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function normalizeDraftField(value: unknown, fallback: string | number): string {
+function normalizeDraftField(
+  value: unknown,
+  fallback: string | number,
+): string {
   if (typeof value === 'string') {
     return value;
   }
@@ -16,6 +20,28 @@ function normalizeDraftField(value: unknown, fallback: string | number): string 
   }
 
   return String(fallback);
+}
+
+function normalizeDraftProductUrls(
+  draft: Record<string, unknown>,
+  fallback: PopupFormValues,
+): string[] {
+  if (Array.isArray(draft.productUrls)) {
+    return normalizeProductUrls(draft.productUrls);
+  }
+
+  const legacyProductUrl =
+    typeof draft.productUrl === 'string'
+      ? draft.productUrl
+      : typeof draft.productSourceUrl === 'string'
+        ? draft.productSourceUrl
+        : null;
+
+  if (legacyProductUrl !== null) {
+    return normalizeProductUrls([legacyProductUrl]);
+  }
+
+  return normalizeProductUrls(fallback.productUrls);
 }
 
 export function normalizePopupMarginDraft(
@@ -34,10 +60,11 @@ export function normalizePopupMarginDraft(
       draft.productionCost,
       fallback.productionCost,
     ),
-    productUrl: normalizeDraftField(
-      draft.productUrl ?? draft.productSourceUrl,
-      fallback.productUrl,
+    productUrlInput: normalizeDraftField(
+      draft.productUrlInput,
+      fallback.productUrlInput,
     ),
+    productUrls: normalizeDraftProductUrls(draft, fallback),
     salesCommission: normalizeDraftField(
       draft.salesCommission,
       fallback.salesCommission,

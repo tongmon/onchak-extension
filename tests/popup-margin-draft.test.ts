@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { normalizePopupMarginDraft } from '../src/pages/popup-home/model/popup-margin-draft.ts';
+import { normalizeExtensionSettings } from '../src/shared/extension/storage/schema.ts';
 
 const fallback = {
   productionCostCurrency: 'cny' as const,
   productionCost: '',
-  productUrl: '',
+  productUrlInput: '',
+  productUrls: [],
   salesCommission: '10.8',
   coupangProductCost: '',
   inboundOutboundShippingFee: '',
@@ -29,7 +31,8 @@ test('normalizePopupMarginDraft restores cached margin calculator inputs', () =>
   assert.deepEqual(draft, {
     productionCostCurrency: 'krw',
     productionCost: '12500',
-    productUrl: 'https://detail.1688.com/offer/123.html',
+    productUrlInput: '',
+    productUrls: ['https://detail.1688.com/offer/123.html'],
     salesCommission: '9.9',
     coupangProductCost: '22900',
     inboundOutboundShippingFee: '1800',
@@ -42,10 +45,31 @@ test('normalizePopupMarginDraft falls back for malformed values', () => {
     {
       productionCostCurrency: 'usd',
       productionCost: null,
-      productUrl: false,
+      productUrls: false,
     },
     fallback,
   );
 
   assert.deepEqual(draft, fallback);
+});
+
+test('normalizeExtensionSettings migrates the legacy product url to a list', () => {
+  const settings = normalizeExtensionSettings({
+    productUrl: 'https://detail.1688.com/offer/123.html',
+  });
+
+  assert.equal(settings.productUrl, 'https://detail.1688.com/offer/123.html');
+  assert.deepEqual(settings.productUrls, [
+    'https://detail.1688.com/offer/123.html',
+  ]);
+});
+
+test('normalizeExtensionSettings preserves an explicitly cleared product url list', () => {
+  const settings = normalizeExtensionSettings({
+    productUrl: 'https://detail.1688.com/offer/123.html',
+    productUrls: [],
+  });
+
+  assert.equal(settings.productUrl, '');
+  assert.deepEqual(settings.productUrls, []);
 });

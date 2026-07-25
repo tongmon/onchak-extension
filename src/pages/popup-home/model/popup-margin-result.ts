@@ -7,7 +7,7 @@ import type { ProductionCostCurrency } from "./popup-home-form";
 export interface PopupMarginCalculationInputs {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: number;
-  productUrl: string;
+  productUrls: string[];
   salesCommission: number;
   coupangProductCost: number;
   inboundOutboundShippingFee: number;
@@ -23,6 +23,7 @@ export interface PopupMarginCalculationResult {
   productionCostCurrency: ProductionCostCurrency;
   productionCost: number;
   productUrl: string;
+  productUrls: string[];
   exchangeRate: number;
   product1688Cost: number;
   inboundOutboundShippingFeeVat: number;
@@ -111,8 +112,7 @@ export function createPopupMarginCalculationResult({
     inputs.productionCostCurrency === "cny"
       ? inputs.exchangeRate * inputs.productionCost
       : inputs.productionCost;
-  const inboundOutboundShippingFeeVat =
-    inputs.inboundOutboundShippingFee * 0.1;
+  const inboundOutboundShippingFeeVat = inputs.inboundOutboundShippingFee * 0.1;
   const salesCommissionFee =
     inputs.coupangProductCost * (inputs.salesCommission / 100);
   const salesCommissionFeeVat = salesCommissionFee * 0.1;
@@ -154,7 +154,8 @@ export function createPopupMarginCalculationResult({
     trimmedPriceSampleCount,
     productionCostCurrency: inputs.productionCostCurrency,
     productionCost: inputs.productionCost,
-    productUrl: inputs.productUrl,
+    productUrl: inputs.productUrls[0] ?? "",
+    productUrls: inputs.productUrls,
     exchangeRate: inputs.exchangeRate,
     product1688Cost,
     inboundOutboundShippingFeeVat,

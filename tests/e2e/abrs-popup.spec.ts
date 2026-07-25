@@ -346,8 +346,17 @@ test('margin calculator restores draft inputs after popup remount', async ({}, t
     await firstPopup.getByLabel('상품 매입 원가(소싱 원가)').fill('12500');
     await firstPopup.getByLabel('쿠팡 상품 판매가').fill('22900');
     await firstPopup
-      .getByLabel('원가 사이트 링크')
+      .getByRole('textbox', { name: '원가 사이트 링크', exact: true })
       .fill('https://detail.1688.com/offer/123.html');
+    await firstPopup
+      .getByRole('button', { name: '원가 사이트 링크 추가', exact: true })
+      .click();
+    await firstPopup
+      .getByRole('textbox', { name: '원가 사이트 링크', exact: true })
+      .fill('https://detail.1688.com/offer/456.html');
+    await firstPopup
+      .getByRole('button', { name: '원가 사이트 링크 추가', exact: true })
+      .click();
 
     await expect
       .poll(() =>
@@ -355,10 +364,13 @@ test('margin calculator restores draft inputs after popup remount', async ({}, t
           const stored = await chrome.storage.local.get([
             'popupMarginCalculatorDraft',
           ]);
-          return stored.popupMarginCalculatorDraft?.productUrl;
+          return stored.popupMarginCalculatorDraft?.productUrls;
         }),
       )
-      .toBe('https://detail.1688.com/offer/123.html');
+      .toEqual([
+        'https://detail.1688.com/offer/123.html',
+        'https://detail.1688.com/offer/456.html',
+      ]);
     await firstPopup.close();
 
     const secondPopup = await openExtensionPopup(context);
@@ -368,9 +380,22 @@ test('margin calculator restores draft inputs after popup remount', async ({}, t
     await expect(secondPopup.getByLabel('쿠팡 상품 판매가')).toHaveValue(
       '22,900원',
     );
-    await expect(secondPopup.getByLabel('원가 사이트 링크')).toHaveValue(
-      'https://detail.1688.com/offer/123.html',
-    );
+    await expect(
+      secondPopup.getByRole('textbox', {
+        name: '원가 사이트 링크',
+        exact: true,
+      }),
+    ).toHaveValue('');
+    await expect(
+      secondPopup.getByRole('link', {
+        name: '1. https://detail.1688.com/offer/123.html',
+      }),
+    ).toBeVisible();
+    await expect(
+      secondPopup.getByRole('link', {
+        name: '2. https://detail.1688.com/offer/456.html',
+      }),
+    ).toBeVisible();
   } finally {
     await context.close();
   }

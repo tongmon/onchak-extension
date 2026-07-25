@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getPopupFeedbackState } from '../src/pages/popup-home/model/popup-home-form.ts';
+import {
+  appendProductUrl,
+  getPopupFeedbackState,
+} from '../src/pages/popup-home/model/popup-home-form.ts';
 import { createPopupMarginCalculationResult } from '../src/pages/popup-home/model/popup-margin-result.ts';
 
 test('createPopupMarginCalculationResult includes unique popular item categories', () => {
@@ -8,7 +11,10 @@ test('createPopupMarginCalculationResult includes unique popular item categories
     inputs: {
       productionCostCurrency: 'cny',
       productionCost: 1000,
-      productUrl: 'https://detail.1688.com/offer/123.html',
+      productUrls: [
+        'https://detail.1688.com/offer/123.html',
+        'https://detail.1688.com/offer/456.html',
+      ],
       salesCommission: 10,
       coupangProductCost: 5000,
       inboundOutboundShippingFee: 300,
@@ -58,6 +64,10 @@ test('createPopupMarginCalculationResult includes unique popular item categories
 
   assert.deepEqual(result.categories, ['패션잡화 > 양말', '생활용품']);
   assert.equal(result.productUrl, 'https://detail.1688.com/offer/123.html');
+  assert.deepEqual(result.productUrls, [
+    'https://detail.1688.com/offer/123.html',
+    'https://detail.1688.com/offer/456.html',
+  ]);
 });
 
 test('createPopupMarginCalculationResult uses production cost directly for KRW inputs', () => {
@@ -65,7 +75,7 @@ test('createPopupMarginCalculationResult uses production cost directly for KRW i
     inputs: {
       productionCostCurrency: 'krw',
       productionCost: 1200,
-      productUrl: '',
+      productUrls: [],
       salesCommission: 10,
       coupangProductCost: 5000,
       inboundOutboundShippingFee: 300,
@@ -82,6 +92,31 @@ test('createPopupMarginCalculationResult uses production cost directly for KRW i
   assert.equal(result.product1688Cost, 1200);
 });
 
+test('appendProductUrl adds normalized links and rejects duplicates', () => {
+  const first = appendProductUrl(
+    [],
+    ' https://detail.1688.com/offer/123.html ',
+  );
+  const duplicate = appendProductUrl(
+    first.productUrls,
+    'https://detail.1688.com/offer/123.html',
+  );
+  const second = appendProductUrl(
+    first.productUrls,
+    'https://detail.1688.com/offer/456.html',
+  );
+
+  assert.equal(first.error, null);
+  assert.deepEqual(first.productUrls, [
+    'https://detail.1688.com/offer/123.html',
+  ]);
+  assert.match(duplicate.error ?? '', /이미 추가된/);
+  assert.deepEqual(second.productUrls, [
+    'https://detail.1688.com/offer/123.html',
+    'https://detail.1688.com/offer/456.html',
+  ]);
+});
+
 test('getPopupFeedbackState gives a recovery guide when the active tab content script is missing', () => {
   const feedback = getPopupFeedbackState(
     new Error('Could not establish connection. Receiving end does not exist.'),
@@ -94,7 +129,9 @@ test('getPopupFeedbackState gives a recovery guide when the active tab content s
 
 test('getPopupFeedbackState gives the same recovery guide when content script injection is blocked', () => {
   const feedback = getPopupFeedbackState(
-    new Error('현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.'),
+    new Error(
+      '현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.',
+    ),
   );
 
   assert.equal(feedback.color, 'yellow');
