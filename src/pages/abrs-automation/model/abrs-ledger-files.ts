@@ -57,6 +57,7 @@ const REQUIRED_SLOTS: AbrsLedgerFileSlot[] = [
   'inventoryHealth',
   'salesStatistics',
   'dailySettlement',
+  'productList',
 ];
 
 function formatCompactDate(value: string): string | null {

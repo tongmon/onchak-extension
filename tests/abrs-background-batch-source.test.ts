@@ -40,6 +40,10 @@ test('background runtime persists ABRS batches and queries non-active Coupang ta
   assert.match(router, /chrome\.storage\.local/);
   assert.match(router, /chrome\.tabs\.query/);
   assert.match(router, /handleDownloadAllAbrsLedgerFiles/);
+  assert.match(
+    router,
+    /const ABRS_LEDGER_DOWNLOAD_SLOTS:[\s\S]*'inventoryHealth',[\s\S]*'salesStatistics',[\s\S]*'dailySettlement',[\s\S]*'productList'/,
+  );
   assert.match(router, /abrs\/download-all-ledger-files/);
   assert.match(router, /chrome\.downloads\.download/);
   assert.match(router, /handleDownloadCachedAbrsLedgerFile/);

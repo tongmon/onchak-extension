@@ -65,7 +65,7 @@ const SLOT_ROWS: Array<{
   { slot: 'inventoryHealth', label: '재고 현황', required: true },
   { slot: 'salesStatistics', label: '판매 현황', required: true },
   { slot: 'dailySettlement', label: '광고비/정산', required: true },
-  { slot: 'productList', label: '상품 리스트', required: false },
+  { slot: 'productList', label: '상품 리스트', required: true },
 ];
 
 const AUTO_DOWNLOADABLE_SLOTS = new Set<AbrsCoupangLedgerDownloadSlot>([
@@ -440,7 +440,7 @@ export function AbrsLedgerImportCard(): ReactElement {
             </Text>
           </Stack>
           <Badge color={validation.ok ? 'teal' : 'gray'} radius="xl" variant="light">
-            {loadingBatch ? 'Loading' : validation.ok ? 'Ready' : `${requiredEntryCount}/3 필수`}
+            {loadingBatch ? 'Loading' : `${requiredEntryCount}/4 필수`}
           </Badge>
         </Group>
 
@@ -465,7 +465,7 @@ export function AbrsLedgerImportCard(): ReactElement {
           radius="md"
           variant="light"
         >
-          필수 3개 한번에 가져오기
+          필수 4개 한번에 가져오기
         </Button>
 
         <Paper

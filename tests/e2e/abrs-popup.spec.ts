@@ -54,6 +54,7 @@ async function attachAbrsWorkbooks(page: Awaited<ReturnType<typeof openExtension
     'inventory_health_sku_info_20260616220816.xlsx',
     'Statistics-20260418~20260418_(0).xlsx',
     'A01549099-dailySettlement-20260418-20260418.xlsx',
+    'price_inventory_260717.xlsx',
   ]) {
     const chooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '파일 추가' }).click();
@@ -272,7 +273,7 @@ test('ABRS popup downloads a cached workbook from its row action', async ({}, te
   }
 });
 
-test('ABRS popup exposes optional Coupang product list collection', async ({}, testInfo) => {
+test('ABRS popup renders the Coupang product list as required', async ({}, testInfo) => {
   const context = await chromium.launchPersistentContext(
     testInfo.outputPath('product-list-profile'),
     {
@@ -290,7 +291,13 @@ test('ABRS popup exposes optional Coupang product list collection', async ({}, t
     await expect(
       page.getByRole('button', { name: '상품 리스트 Coupang에서 가져오기' }),
     ).toBeVisible();
-    await expect(page.getByText('Optional')).toBeVisible();
+    await expect(page.getByText('0/4 필수')).toBeVisible();
+    await expect(
+      page
+        .getByText('상품 리스트', { exact: true })
+        .locator('xpath=../..')
+        .getByText('Need'),
+    ).toBeVisible();
   } finally {
     await context.close();
   }

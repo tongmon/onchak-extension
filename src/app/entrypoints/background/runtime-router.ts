@@ -31,6 +31,7 @@ const ABRS_LEDGER_DOWNLOAD_SLOTS: AbrsCoupangLedgerDownloadSlot[] = [
   'inventoryHealth',
   'salesStatistics',
   'dailySettlement',
+  'productList',
 ];
 const WING_LEDGER_START_URL =
   'https://wing.coupang.com/tenants/rfm-inventory/management/list';

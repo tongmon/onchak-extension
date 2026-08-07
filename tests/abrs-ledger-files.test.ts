@@ -56,7 +56,7 @@ test('classifyAbrsLedgerFile maps inventory health without using its timestamp a
   });
 });
 
-test('classifyAbrsLedgerFile maps optional Coupang product list files', () => {
+test('classifyAbrsLedgerFile maps required Coupang product list files', () => {
   const classified = classifyAbrsLedgerFile('price_inventory_260717.xlsx');
 
   assert.deepEqual(classified, {
@@ -124,25 +124,43 @@ test('validateAbrsLedgerFiles reports missing slots and target-date mismatches',
   assert.match(validation.messages.join('\n'), /2026-04-18/);
 });
 
-test('validateAbrsLedgerFiles accepts the three required workbook slots', () => {
+test('validateAbrsLedgerFiles rejects each missing required workbook slot', () => {
   const targetDate = '2026-04-18';
-  const entries = upsertAbrsLedgerFiles(
-    [],
-    [
-      file('inventory_health_sku_info_20260616220816.xlsx'),
-      file('Statistics-20260418~20260418_(0).xlsx'),
-      file('A01549099-dailySettlement-20260418-20260418.xlsx'),
-    ],
-    targetDate,
-  );
+  const requiredFiles = [
+    {
+      fileName: 'inventory_health_sku_info_20260616220816.xlsx',
+      label: '재고 현황',
+    },
+    {
+      fileName: 'Statistics-20260418~20260418_(0).xlsx',
+      label: '판매 현황',
+    },
+    {
+      fileName: 'A01549099-dailySettlement-20260418-20260418.xlsx',
+      label: '광고비/정산',
+    },
+    {
+      fileName: 'price_inventory_260717.xlsx',
+      label: '상품 리스트',
+    },
+  ];
 
-  assert.deepEqual(validateAbrsLedgerFiles(entries, targetDate), {
-    ok: true,
-    messages: [],
-  });
+  for (const missing of requiredFiles) {
+    const entries = upsertAbrsLedgerFiles(
+      [],
+      requiredFiles
+        .filter((candidate) => candidate !== missing)
+        .map((candidate) => file(candidate.fileName)),
+      targetDate,
+    );
+    const validation = validateAbrsLedgerFiles(entries, targetDate);
+
+    assert.equal(validation.ok, false);
+    assert.match(validation.messages.join('\n'), new RegExp(missing.label));
+  }
 });
 
-test('validateAbrsLedgerFiles keeps the product list optional', () => {
+test('validateAbrsLedgerFiles accepts all four required workbook slots', () => {
   const targetDate = '2026-04-18';
   const entries = upsertAbrsLedgerFiles(
     [],
@@ -155,7 +173,6 @@ test('validateAbrsLedgerFiles keeps the product list optional', () => {
     targetDate,
   );
 
-  assert.equal(entries.at(-1)?.slot, 'productList');
   assert.deepEqual(validateAbrsLedgerFiles(entries, targetDate), {
     ok: true,
     messages: [],
