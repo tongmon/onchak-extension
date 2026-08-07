@@ -39,14 +39,16 @@ import {
 import {
   clearAbrsLedgerBatch,
   downloadCachedAbrsLedgerFile,
-  downloadAllAbrsLedgerFiles,
   getAbrsLedgerBatch,
   getAbrsLedgerSelectedTargetDate,
   saveAbrsLedgerBatchFiles,
   saveAbrsLedgerSelectedTargetDate,
-  type DownloadAllAbrsLedgerFilesResult,
 } from '../api/abrs-ledger-batch-runtime';
 import { downloadAbrsCoupangLedgerFileFromActiveTab } from '../api/download-abrs-coupang-ledger-file';
+import {
+  downloadAbrsLedgerBatchWithProgress,
+  type AbrsLedgerBatchDownloadResult,
+} from '../model/abrs-ledger-batch-progress';
 import { useUploadAbrsLedgerImportMutation } from '../api/upload-abrs-ledger-import-mutation';
 import type { AbrsCoupangLedgerDownloadSlot } from '@/shared/extension';
 
@@ -113,7 +115,7 @@ function createUnsupportedFileMessage(files: File[]): string | null {
 }
 
 function createDownloadAllFeedback(
-  result: DownloadAllAbrsLedgerFilesResult,
+  result: AbrsLedgerBatchDownloadResult,
 ): UploadFeedback {
   const downloaded = result.statuses.filter(
     (status) => status.status === 'downloaded',
@@ -263,6 +265,19 @@ export function AbrsLedgerImportCard(): ReactElement {
     });
   };
 
+  const persistFiles = async (files: File[]) => {
+    const currentBatch = await getAbrsLedgerBatch(targetDate);
+    const persistedEntries = await persistAbrsLedgerFiles({
+      existingEntries: currentBatch.entries,
+      files,
+      targetDate,
+    });
+    return saveAbrsLedgerBatchFiles({
+      targetDate,
+      entries: persistedEntries,
+    });
+  };
+
   const handleFiles = async (files: File[]): Promise<boolean> => {
     if (files.length === 0) {
       return true;
@@ -272,16 +287,7 @@ export function AbrsLedgerImportCard(): ReactElement {
     setFeedback(null);
 
     try {
-      const currentBatch = await getAbrsLedgerBatch(targetDate);
-      const persistedEntries = await persistAbrsLedgerFiles({
-        existingEntries: currentBatch.entries,
-        files,
-        targetDate,
-      });
-      const nextBatch = await saveAbrsLedgerBatchFiles({
-        targetDate,
-        entries: persistedEntries,
-      });
+      const nextBatch = await persistFiles(files);
 
       setEntries(restoreAbrsLedgerEntries(nextBatch.entries));
       setFeedback(
@@ -387,7 +393,16 @@ export function AbrsLedgerImportCard(): ReactElement {
     setDownloadingAll(true);
 
     try {
-      const result = await downloadAllAbrsLedgerFiles(targetDate);
+      const initialBatch = await getAbrsLedgerBatch(targetDate);
+      const result = await downloadAbrsLedgerBatchWithProgress({
+        targetDate,
+        initialBatch,
+        downloadSlot: downloadAbrsCoupangLedgerFileFromActiveTab,
+        persistSlot: async (file) => persistFiles([file]),
+        onProgress: ({ batch }) => {
+          setEntries(restoreAbrsLedgerEntries(batch.entries));
+        },
+      });
 
       setEntries(restoreAbrsLedgerEntries(result.batch.entries));
       setFeedback(createDownloadAllFeedback(result));
