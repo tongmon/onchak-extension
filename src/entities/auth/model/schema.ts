@@ -43,7 +43,7 @@ function normalizeConfiguredBaseUrl(input?: string | null): string | null {
 }
 
 const configuredDefaultApiBaseUrl = normalizeConfiguredBaseUrl(
-  import.meta.env.VITE_API_BASE_URL,
+  import.meta.env?.VITE_API_BASE_URL,
 );
 
 export const defaultAuthConfig: AuthConfig = {
@@ -81,7 +81,7 @@ function normalizeAuthPath(
 }
 
 function normalizeAuthMode(input?: AuthMode | null): AuthMode {
-  return input === "remote" ? "remote" : "mock";
+  return input === "mock" ? "mock" : "remote";
 }
 
 function isIsoDateString(value: string): boolean {
@@ -107,7 +107,7 @@ export function normalizeAuthConfig(
   input?: Partial<AuthConfig> | null,
 ): AuthConfig {
   return {
-    mode: normalizeAuthMode(input?.mode),
+    mode: "remote",
     apiBaseUrl: normalizeApiBaseUrl(input?.apiBaseUrl),
     loginPath: normalizeAuthPath(input?.loginPath, defaultAuthConfig.loginPath),
     csrfPath: normalizeAuthPath(input?.csrfPath, defaultAuthConfig.csrfPath),

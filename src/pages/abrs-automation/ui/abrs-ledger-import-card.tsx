@@ -5,7 +5,7 @@ import {
   useState,
   type DragEvent,
   type ReactElement,
-} from 'react';
+} from "react";
 import {
   Alert,
   Badge,
@@ -17,7 +17,7 @@ import {
   TextInput,
   Title,
   Tooltip,
-} from '@mantine/core';
+} from "@mantine/core";
 import {
   IconCloudDownload,
   IconDownload,
@@ -25,17 +25,17 @@ import {
   IconRefresh,
   IconTrash,
   IconUpload,
-} from '@tabler/icons-react';
+} from "@tabler/icons-react";
 import {
   classifyAbrsLedgerFile,
   validateAbrsLedgerFiles,
   type AbrsLedgerFileEntry,
   type AbrsLedgerFileSlot,
-} from '../model/abrs-ledger-files';
+} from "../model/abrs-ledger-files";
 import {
   persistAbrsLedgerFiles,
   restoreAbrsLedgerEntries,
-} from '../model/abrs-ledger-batch-cache';
+} from "../model/abrs-ledger-batch-cache";
 import {
   clearAbrsLedgerBatch,
   downloadCachedAbrsLedgerFile,
@@ -43,20 +43,21 @@ import {
   getAbrsLedgerSelectedTargetDate,
   saveAbrsLedgerBatchFiles,
   saveAbrsLedgerSelectedTargetDate,
-} from '../api/abrs-ledger-batch-runtime';
-import { downloadAbrsCoupangLedgerFileFromActiveTab } from '../api/download-abrs-coupang-ledger-file';
+} from "../api/abrs-ledger-batch-runtime";
+import { downloadAbrsCoupangLedgerFileFromActiveTab } from "../api/download-abrs-coupang-ledger-file";
 import {
   downloadAbrsLedgerBatchWithProgress,
   type AbrsLedgerBatchDownloadResult,
-} from '../model/abrs-ledger-batch-progress';
-import { useUploadAbrsLedgerImportMutation } from '../api/upload-abrs-ledger-import-mutation';
-import type { AbrsCoupangLedgerDownloadSlot } from '@/shared/extension';
+} from "../model/abrs-ledger-batch-progress";
+import { useUploadAbrsLedgerImportMutation } from "../api/upload-abrs-ledger-import-mutation";
+import type { AbrsCoupangLedgerDownloadSlot } from "@/shared/extension";
 
 interface UploadFeedback {
-  color: 'green' | 'red' | 'yellow';
+  color: "green" | "red" | "yellow";
   title: string;
   message: string;
   suppressValidation?: boolean;
+  reviewUrl?: string;
 }
 
 const SLOT_ROWS: Array<{
@@ -64,17 +65,17 @@ const SLOT_ROWS: Array<{
   label: string;
   required: boolean;
 }> = [
-  { slot: 'inventoryHealth', label: '재고 현황', required: true },
-  { slot: 'salesStatistics', label: '판매 현황', required: true },
-  { slot: 'dailySettlement', label: '광고비/정산', required: true },
-  { slot: 'productList', label: '상품 리스트', required: true },
+  { slot: "inventoryHealth", label: "재고 현황", required: true },
+  { slot: "salesStatistics", label: "판매 현황", required: true },
+  { slot: "dailySettlement", label: "광고비/정산", required: true },
+  { slot: "productList", label: "상품 리스트", required: true },
 ];
 
 const AUTO_DOWNLOADABLE_SLOTS = new Set<AbrsCoupangLedgerDownloadSlot>([
-  'inventoryHealth',
-  'salesStatistics',
-  'dailySettlement',
-  'productList',
+  "inventoryHealth",
+  "salesStatistics",
+  "dailySettlement",
+  "productList",
 ]);
 
 function isAutoDownloadableSlot(
@@ -85,8 +86,8 @@ function isAutoDownloadableSlot(
 
 function formatDateInputValue(date: Date): string {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
@@ -99,7 +100,7 @@ function getDefaultTargetDate(): string {
 }
 
 function getFileNames(files: File[]): string {
-  return files.map((file) => file.name).join(', ');
+  return files.map((file) => file.name).join(", ");
 }
 
 function createUnsupportedFileMessage(files: File[]): string | null {
@@ -118,37 +119,41 @@ function createDownloadAllFeedback(
   result: AbrsLedgerBatchDownloadResult,
 ): UploadFeedback {
   const downloaded = result.statuses.filter(
-    (status) => status.status === 'downloaded',
+    (status) => status.status === "downloaded",
   );
-  const failed = result.statuses.filter((status) => status.status === 'failed');
+  const failed = result.statuses.filter((status) => status.status === "failed");
 
   if (failed.length === 0) {
     return {
-      color: 'green',
-      title: '파일 가져오기 완료',
+      color: "green",
+      title: "파일 가져오기 완료",
       message: `${downloaded.length}개 장부 파일을 가져와 cache에 저장했습니다.`,
     };
   }
 
   if (downloaded.length > 0) {
     return {
-      color: 'yellow',
-      title: '일부 파일 가져오기 완료',
+      color: "yellow",
+      title: "일부 파일 가져오기 완료",
       message: [
         `${downloaded.length}개 파일은 저장했습니다.`,
         ...failed.map((status) => `${status.slot}: ${status.error}`),
-      ].join('\n'),
+      ].join("\n"),
     };
   }
 
   return {
-    color: 'red',
-    title: '파일 가져오기 실패',
-    message: failed.map((status) => `${status.slot}: ${status.error}`).join('\n'),
+    color: "red",
+    title: "파일 가져오기 실패",
+    message: failed
+      .map((status) => `${status.slot}: ${status.error}`)
+      .join("\n"),
   };
 }
 
 export function AbrsLedgerImportCard(): ReactElement {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [targetDate, setTargetDate] = useState(getDefaultTargetDate);
   const [targetDateReady, setTargetDateReady] = useState(false);
@@ -230,12 +235,12 @@ export function AbrsLedgerImportCard(): ReactElement {
 
         setEntries([]);
         setFeedback({
-          color: 'red',
-          title: 'Cache 불러오기 실패',
+          color: "red",
+          title: "Cache 불러오기 실패",
           message:
             error instanceof Error
               ? error.message
-              : '저장된 장부 파일 cache를 불러오지 못했습니다.',
+              : "저장된 장부 파일 cache를 불러오지 못했습니다.",
         });
       })
       .finally(() => {
@@ -255,23 +260,25 @@ export function AbrsLedgerImportCard(): ReactElement {
 
     void saveAbrsLedgerSelectedTargetDate(nextTargetDate).catch((error) => {
       setFeedback({
-        color: 'yellow',
-        title: '날짜 cache 저장 실패',
+        color: "yellow",
+        title: "날짜 cache 저장 실패",
         message:
           error instanceof Error
             ? error.message
-            : '선택한 장부 날짜를 cache에 저장하지 못했습니다.',
+            : "선택한 장부 날짜를 cache에 저장하지 못했습니다.",
       });
     });
   };
 
   const persistFiles = async (files: File[]) => {
+    if (!mounted.current) throw new Error("계정이 변경되었습니다. 파일을 다시 선택해 주세요.");
     const currentBatch = await getAbrsLedgerBatch(targetDate);
     const persistedEntries = await persistAbrsLedgerFiles({
       existingEntries: currentBatch.entries,
       files,
       targetDate,
     });
+    if (!mounted.current) throw new Error("계정이 변경되었습니다. 파일을 다시 선택해 주세요.");
     return saveAbrsLedgerBatchFiles({
       targetDate,
       entries: persistedEntries,
@@ -293,8 +300,8 @@ export function AbrsLedgerImportCard(): ReactElement {
       setFeedback(
         unsupportedMessage
           ? {
-              color: 'yellow',
-              title: '파일 확인',
+              color: "yellow",
+              title: "파일 확인",
               message: unsupportedMessage,
             }
           : null,
@@ -302,12 +309,12 @@ export function AbrsLedgerImportCard(): ReactElement {
       return true;
     } catch (error) {
       setFeedback({
-        color: 'red',
-        title: '파일 저장 실패',
+        color: "red",
+        title: "파일 저장 실패",
         message:
           error instanceof Error
             ? error.message
-            : '장부 파일 cache를 저장하지 못했습니다.',
+            : "장부 파일 cache를 저장하지 못했습니다.",
       });
       return false;
     }
@@ -319,6 +326,7 @@ export function AbrsLedgerImportCard(): ReactElement {
   };
 
   const handleUpload = async () => {
+    if (uploadMutation.isPending) return;
     setFeedback(null);
 
     try {
@@ -327,22 +335,22 @@ export function AbrsLedgerImportCard(): ReactElement {
         entries,
       });
 
-      await clearAbrsLedgerBatch(targetDate).catch(() => undefined);
       setEntries([]);
       setFeedback({
-        color: 'green',
-        title: '업로드 완료',
-        message: `${result.batchName} 장부 데이터를 서버에 업로드했습니다.`,
+        color: "green",
+        title: "업로드 완료",
+        message: `${result.batchName} 파일 접수가 완료되었습니다. ${result.workflow?.needsRecalculation === false ? "현재 계산 결과를 웹에서 확인해 주세요." : "웹에서 입력과 매핑을 검토하고 계산을 완료해 주세요."}`,
+        reviewUrl: result.reviewUrl,
         suppressValidation: true,
       });
     } catch (error) {
       setFeedback({
-        color: 'red',
-        title: '업로드 실패',
+        color: "red",
+        title: "업로드 실패",
         message:
           error instanceof Error
             ? error.message
-            : '장부 데이터를 업로드하지 못했습니다.',
+            : "장부 데이터를 업로드하지 못했습니다.",
       });
     }
   };
@@ -370,18 +378,18 @@ export function AbrsLedgerImportCard(): ReactElement {
       }
 
       setFeedback({
-        color: 'green',
-        title: '파일 가져오기 완료',
+        color: "green",
+        title: "파일 가져오기 완료",
         message: `${file.name} 파일을 추가했습니다.`,
       });
     } catch (error) {
       setFeedback({
-        color: 'red',
-        title: '파일 가져오기 실패',
+        color: "red",
+        title: "파일 가져오기 실패",
         message:
           error instanceof Error
             ? error.message
-            : 'Coupang Wing 파일을 가져오지 못했습니다.',
+            : "Coupang Wing 파일을 가져오지 못했습니다.",
       });
     } finally {
       setDownloadingSlot(null);
@@ -408,12 +416,12 @@ export function AbrsLedgerImportCard(): ReactElement {
       setFeedback(createDownloadAllFeedback(result));
     } catch (error) {
       setFeedback({
-        color: 'red',
-        title: '파일 가져오기 실패',
+        color: "red",
+        title: "파일 가져오기 실패",
         message:
           error instanceof Error
             ? error.message
-            : 'Coupang 장부 파일을 가져오지 못했습니다.',
+            : "Coupang 장부 파일을 가져오지 못했습니다.",
       });
     } finally {
       setDownloadingAll(false);
@@ -426,18 +434,18 @@ export function AbrsLedgerImportCard(): ReactElement {
     try {
       const result = await downloadCachedAbrsLedgerFile({ targetDate, slot });
       setFeedback({
-        color: 'green',
-        title: '파일 다운로드 시작',
+        color: "green",
+        title: "파일 다운로드 시작",
         message: `${result.fileName} 파일 다운로드를 시작했습니다.`,
       });
     } catch (error) {
       setFeedback({
-        color: 'red',
-        title: '파일 다운로드 실패',
+        color: "red",
+        title: "파일 다운로드 실패",
         message:
           error instanceof Error
             ? error.message
-            : '저장된 장부 파일을 다운로드하지 못했습니다.',
+            : "저장된 장부 파일을 다운로드하지 못했습니다.",
       });
     }
   };
@@ -454,8 +462,12 @@ export function AbrsLedgerImportCard(): ReactElement {
               Coupang Wing/광고센터 엑셀 파일
             </Text>
           </Stack>
-          <Badge color={validation.ok ? 'teal' : 'gray'} radius="xl" variant="light">
-            {loadingBatch ? 'Loading' : `${requiredEntryCount}/4 필수`}
+          <Badge
+            color={validation.ok ? "teal" : "gray"}
+            radius="xl"
+            variant="light"
+          >
+            {loadingBatch ? "Loading" : `${requiredEntryCount}/4 필수`}
           </Badge>
         </Group>
 
@@ -500,13 +512,22 @@ export function AbrsLedgerImportCard(): ReactElement {
                 : null;
 
               return (
-                <Group key={row.slot} gap="xs" justify="space-between" wrap="nowrap">
+                <Group
+                  key={row.slot}
+                  gap="xs"
+                  justify="space-between"
+                  wrap="nowrap"
+                >
                   <Stack gap={0} style={{ minWidth: 0 }}>
                     <Text fw={600} size="sm">
                       {row.label}
                     </Text>
-                    <Text c={entry ? undefined : 'dimmed'} lineClamp={1} size="xs">
-                      {entry?.file.name ?? '파일 없음'}
+                    <Text
+                      c={entry ? undefined : "dimmed"}
+                      lineClamp={1}
+                      size="xs"
+                    >
+                      {entry?.file.name ?? "파일 없음"}
                     </Text>
                   </Stack>
                   <Group gap="xs" wrap="nowrap">
@@ -542,8 +563,12 @@ export function AbrsLedgerImportCard(): ReactElement {
                         </Button>
                       </Tooltip>
                     ) : null}
-                    <Badge color={entry ? 'teal' : 'gray'} radius="xl" variant="light">
-                      {entry ? 'OK' : row.required ? 'Need' : 'Optional'}
+                    <Badge
+                      color={entry ? "teal" : "gray"}
+                      radius="xl"
+                      variant="light"
+                    >
+                      {entry ? "OK" : row.required ? "Need" : "Optional"}
                     </Badge>
                   </Group>
                 </Group>
@@ -554,13 +579,25 @@ export function AbrsLedgerImportCard(): ReactElement {
 
         {shouldShowValidation ? (
           <Alert color="yellow" radius="lg" title="확인 필요">
-            {validation.messages.slice(0, 3).join('\n')}
+            {validation.messages.slice(0, 3).join("\n")}
           </Alert>
         ) : null}
 
         {feedback ? (
           <Alert color={feedback.color} radius="lg" title={feedback.title}>
             {feedback.message}
+            {feedback.reviewUrl ? (
+              <Button
+                component="a"
+                href={feedback.reviewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                mt="sm"
+                variant="light"
+              >
+                웹에서 장부 검토
+              </Button>
+            ) : null}
           </Alert>
         ) : null}
 
@@ -571,7 +608,7 @@ export function AbrsLedgerImportCard(): ReactElement {
           multiple
           onChange={(event) => {
             void handleFiles(Array.from(event.currentTarget.files ?? []));
-            event.currentTarget.value = '';
+            event.currentTarget.value = "";
           }}
           type="file"
         />
@@ -601,12 +638,12 @@ export function AbrsLedgerImportCard(): ReactElement {
                 })
                 .catch((error) => {
                   setFeedback({
-                    color: 'red',
-                    title: 'Cache 삭제 실패',
+                    color: "red",
+                    title: "Cache 삭제 실패",
                     message:
                       error instanceof Error
                         ? error.message
-                        : '저장된 장부 파일 cache를 삭제하지 못했습니다.',
+                        : "저장된 장부 파일 cache를 삭제하지 못했습니다.",
                   });
                 });
             }}

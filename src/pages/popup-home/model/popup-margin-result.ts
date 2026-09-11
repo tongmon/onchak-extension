@@ -15,6 +15,16 @@ export interface PopupMarginCalculationInputs {
 }
 
 export interface PopupMarginCalculationResult {
+  schemaVersion: 2;
+  calculationVersion: "SOURCING_MARGIN_V2";
+  capturedAt: string;
+  clientResultId: string;
+  expectedSalePrice: number;
+  salesCommissionRatePct: number;
+  shippingFee: number;
+  conversionRatePct: number;
+  viewPeriodDays: number;
+  expectedMonthlyRevenue: number | null;
   searchKeyword: string;
   categories: string[];
   popularItemCount: number;
@@ -116,12 +126,14 @@ export function createPopupMarginCalculationResult({
   const salesCommissionFee =
     inputs.coupangProductCost * (inputs.salesCommission / 100);
   const salesCommissionFeeVat = salesCommissionFee * 0.1;
-  const valueAddedTax =
+  const valueAddedTax = Math.max(
+    0,
     inputs.coupangProductCost -
-    inputs.coupangProductCost / 1.1 -
-    (product1688Cost - product1688Cost / 1.1) -
-    inboundOutboundShippingFeeVat -
-    salesCommissionFeeVat;
+      inputs.coupangProductCost / 1.1 -
+      (product1688Cost - product1688Cost / 1.1) -
+      inboundOutboundShippingFeeVat -
+      salesCommissionFeeVat,
+  );
   const margin =
     inputs.coupangProductCost -
     product1688Cost -
@@ -133,20 +145,34 @@ export function createPopupMarginCalculationResult({
   const marginRateRatio = divideOrNull(margin, inputs.coupangProductCost);
   const marginRate = marginRateRatio === null ? null : marginRateRatio * 100;
   const advertisingReturnBase =
-    marginRate === null ? null : divideOrNull(11000, marginRate);
-  const minimumAdvertisingReturn =
-    advertisingReturnBase === null ? null : advertisingReturnBase / 10000;
+    marginRate === null || marginRate <= 0
+      ? null
+      : divideOrNull(110, marginRate);
+  const minimumAdvertisingReturn = advertisingReturnBase;
   const average28DayViews = getAverage28DayViews(snapshot.popularItems);
   const { averagePrice, priceSampleCount, trimmedPriceSampleCount } =
     getTrimmedAveragePrice(snapshot.popularItems);
   const expectedMonthlySales =
     average28DayViews === null ? null : average28DayViews * 0.03;
   const expectedMonthlyMargin =
-    expectedMonthlySales === null
-      ? null
-      : inputs.coupangProductCost * expectedMonthlySales;
+    expectedMonthlySales === null ? null : margin * expectedMonthlySales;
 
+  const round = (value: number | null, scale = 6) =>
+    value === null ? null : Number(value.toFixed(scale));
   return {
+    schemaVersion: 2,
+    calculationVersion: "SOURCING_MARGIN_V2",
+    capturedAt: new Date().toISOString(),
+    clientResultId: crypto.randomUUID(),
+    expectedSalePrice: inputs.coupangProductCost,
+    salesCommissionRatePct: inputs.salesCommission,
+    shippingFee: inputs.inboundOutboundShippingFee,
+    conversionRatePct: 3,
+    viewPeriodDays: 28,
+    expectedMonthlyRevenue:
+      expectedMonthlySales === null
+        ? null
+        : round(inputs.coupangProductCost * expectedMonthlySales),
     searchKeyword: snapshot.searchKeyword,
     categories: getUniqueCategories(snapshot.popularItems),
     popularItemCount: snapshot.popularItems.length,
@@ -162,12 +188,12 @@ export function createPopupMarginCalculationResult({
     salesCommissionFee,
     salesCommissionFeeVat,
     valueAddedTax,
-    margin,
-    marginRate,
+    margin: round(margin)!,
+    marginRate: round(marginRate, 10),
     minimumAdvertisingReturn,
     average28DayViews,
     averagePrice,
     expectedMonthlySales,
-    expectedMonthlyMargin,
+    expectedMonthlyMargin: round(expectedMonthlyMargin),
   };
 }

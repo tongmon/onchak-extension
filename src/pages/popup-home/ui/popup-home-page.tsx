@@ -1,5 +1,18 @@
-import { useEffect, useState, type ReactElement } from "react";
-import { Box, Button, Group, Paper, Stack, Text, Title } from "@mantine/core";
+import {
+  loadPendingMarginResult,
+  savePendingMarginResult,
+} from "../model/pending-margin-result";
+import { useEffect, useRef, useState, type ReactElement } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Group,
+  Paper,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useLogoutMutation } from "@/entities/auth";
 import {
@@ -34,15 +47,21 @@ import { PopupHomeFormCard } from "./popup-home-form-card";
 import { PopupMarginResultPage } from "./popup-margin-result-page";
 
 export function PopupHomePage(): ReactElement {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const settings = useExtensionSettingsStore((state) => state.settings);
   const settingsStatus = useExtensionSettingsStore((state) => state.status);
-  const updateSettings = useExtensionSettingsStore((state) => state.update);
   const logoutMutation = useLogoutMutation();
   const [productionCostCurrency, setProductionCostCurrency] =
     useState<ProductionCostCurrency>(settings.productionCostCurrency);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [calculationResult, setCalculationResult] =
     useState<PopupMarginCalculationResult | null>(null);
+  useEffect(() => {
+    void loadPendingMarginResult()
+      .then(setCalculationResult)
+      .catch(() => undefined);
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isDraftReady, setIsDraftReady] = useState(false);
@@ -52,12 +71,12 @@ export function PopupHomePage(): ReactElement {
     mode: "uncontrolled",
     initialValues: createInitialPopupFormValues({
       productionCostCurrency: settings.productionCostCurrency,
-      productionCost: settings.productionCost,
-      productUrl: settings.productUrl,
-      productUrls: settings.productUrls,
+      productionCost: "",
+      productUrl: "",
+      productUrls: [],
       salesCommission: settings.salesCommission,
-      coupangProductCost: settings.coupangProductCost,
-      inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
+      coupangProductCost: "",
+      inboundOutboundShippingFee: "",
       exchangeRate: settings.exchangeRate,
     }),
     onValuesChange: (values) => {
@@ -108,12 +127,12 @@ export function PopupHomePage(): ReactElement {
     let active = true;
     const fallbackValues = createInitialPopupFormValues({
       productionCostCurrency: settings.productionCostCurrency,
-      productionCost: settings.productionCost,
-      productUrl: settings.productUrl,
-      productUrls: settings.productUrls,
+      productionCost: "",
+      productUrl: "",
+      productUrls: [],
       salesCommission: settings.salesCommission,
-      coupangProductCost: settings.coupangProductCost,
-      inboundOutboundShippingFee: settings.inboundOutboundShippingFee,
+      coupangProductCost: "",
+      inboundOutboundShippingFee: "",
       exchangeRate: settings.exchangeRate,
     });
 
@@ -216,20 +235,7 @@ export function PopupHomePage(): ReactElement {
     setCalculationResult(null);
 
     try {
-      await Promise.all([
-        updateSettings({
-          productionCostCurrency: normalizedValues.productionCostCurrency,
-          productionCost: normalizedValues.productionCost,
-          productUrl: normalizedProductUrls[0] ?? "",
-          productUrls: normalizedProductUrls,
-          salesCommission: normalizedValues.salesCommission,
-          coupangProductCost: normalizedValues.coupangProductCost,
-          inboundOutboundShippingFee:
-            normalizedValues.inboundOutboundShippingFee,
-          exchangeRate: normalizedValues.exchangeRate,
-        }),
-        savePopupMarginDraft(normalizedValues),
-      ]);
+      await savePopupMarginDraft(normalizedValues);
       setProductUrls(normalizedProductUrls);
       form.setInitialValues(normalizedValues);
       form.setValues(normalizedValues);
@@ -239,20 +245,21 @@ export function PopupHomePage(): ReactElement {
         type: "page/get-active-tab-popular-search-data",
       });
 
-      setCalculationResult(
-        createPopupMarginCalculationResult({
-          inputs: {
-            productionCostCurrency: values.productionCostCurrency,
-            productionCost,
-            productUrls: normalizedProductUrls,
-            salesCommission,
-            coupangProductCost,
-            inboundOutboundShippingFee,
-            exchangeRate,
-          },
-          snapshot: activeTabSnapshot,
-        }),
-      );
+      if (!mounted.current) return;
+      const nextResult = createPopupMarginCalculationResult({
+        inputs: {
+          productionCostCurrency: values.productionCostCurrency,
+          productionCost,
+          productUrls: normalizedProductUrls,
+          salesCommission,
+          coupangProductCost,
+          inboundOutboundShippingFee,
+          exchangeRate,
+        },
+        snapshot: activeTabSnapshot,
+      });
+      await savePendingMarginResult(nextResult);
+      setCalculationResult(nextResult);
     } catch (error) {
       setFeedback(getPopupFeedbackState(error));
     } finally {
@@ -279,20 +286,7 @@ export function PopupHomePage(): ReactElement {
     setCalculationResult(null);
 
     try {
-      await Promise.all([
-        updateSettings({
-          productionCostCurrency: defaultSavedValues.productionCostCurrency,
-          productionCost: defaultSavedValues.productionCost,
-          productUrl: defaultSavedValues.productUrl,
-          productUrls: defaultSavedValues.productUrls,
-          salesCommission: defaultSavedValues.salesCommission,
-          coupangProductCost: defaultSavedValues.coupangProductCost,
-          inboundOutboundShippingFee:
-            defaultSavedValues.inboundOutboundShippingFee,
-          exchangeRate: defaultSavedValues.exchangeRate,
-        }),
-        savePopupMarginDraft(defaultFormValues),
-      ]);
+      await savePopupMarginDraft(defaultFormValues);
       setProductionCostCurrency(defaultFormValues.productionCostCurrency);
       setProductUrls(defaultFormValues.productUrls);
       form.setInitialValues(defaultFormValues);
@@ -359,12 +353,14 @@ export function PopupHomePage(): ReactElement {
     return (
       <PopupMarginResultPage
         isLoggingOut={logoutMutation.isPending}
+        logoutError={logoutMutation.error?.message}
         result={calculationResult}
         onBack={() => {
           setCalculationResult(null);
+          void savePendingMarginResult(null);
         }}
         onLogout={() => {
-          void logoutMutation.mutateAsync();
+          logoutMutation.mutate();
         }}
       />
     );
@@ -409,7 +405,7 @@ export function PopupHomePage(): ReactElement {
                 fz="xs"
                 loading={logoutMutation.isPending}
                 onClick={() => {
-                  void logoutMutation.mutateAsync();
+                  logoutMutation.mutate();
                 }}
                 size="xs"
                 variant="outline"
@@ -419,6 +415,11 @@ export function PopupHomePage(): ReactElement {
             </Group>
           </Stack>
         </Paper>
+        {logoutMutation.error && (
+          <Alert color="red" title="로그아웃 실패">
+            {logoutMutation.error.message}
+          </Alert>
+        )}
         <PopupHomeFormCard
           feedback={feedback}
           form={form}

@@ -1,3 +1,4 @@
+import { initializeLegacyScope } from '../../../shared/extension/storage/account-scope.ts';
 import {
   defaultAuthConfig,
   normalizeAuthConfig,
@@ -5,7 +6,7 @@ import {
   type AuthConfig,
   type AuthState,
   type AuthSession,
-} from './schema';
+} from './schema.ts';
 
 const storageArea = chrome.storage.local;
 const legacyAuthApiBaseUrl = 'http://59.16.223.28:3000';
@@ -20,6 +21,7 @@ function shouldMigrateLegacyConfig(config?: Partial<AuthConfig>): boolean {
 }
 
 async function ensureDefaults(): Promise<void> {
+  await initializeLegacyScope();
   const result = (await storageArea.get(['authConfig'])) as {
     authConfig?: Partial<AuthConfig>;
   };
@@ -38,6 +40,7 @@ async function ensureDefaults(): Promise<void> {
     storedConfig.csrfPath !== nextConfig.csrfPath
   ) {
     await storageArea.set({ authConfig: nextConfig });
+    await clearSession();
   }
 }
 
@@ -52,6 +55,12 @@ async function getConfig(): Promise<AuthConfig> {
 async function setConfig(config: Partial<AuthConfig>): Promise<AuthConfig> {
   const nextConfig = normalizeAuthConfig(config);
 
+  const current = await getConfig();
+  if (
+    current.apiBaseUrl !== nextConfig.apiBaseUrl ||
+    current.mode !== nextConfig.mode
+  )
+    await clearSession();
   await storageArea.set({ authConfig: nextConfig });
 
   return nextConfig;
@@ -76,11 +85,18 @@ async function setSession(session: AuthSession | null): Promise<void> {
   await storageArea.remove('authSession');
 }
 
-async function clearSession(): Promise<void> {
+async function clearSession(expectedToken?: string): Promise<void> {
+  if (
+    expectedToken !== undefined &&
+    (await getSession())?.accessToken !== expectedToken
+  )
+    return;
   await storageArea.remove('authSession');
 }
 
-function subscribe(listener: (changes: Partial<AuthState>) => void): () => void {
+function subscribe(
+  listener: (changes: Partial<AuthState>) => void,
+): () => void {
   const handleChanges = (
     changes: Record<string, chrome.storage.StorageChange>,
     areaName: string,

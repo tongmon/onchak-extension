@@ -1,4 +1,6 @@
-import { useEffect, type ReactElement } from "react";
+import { MfaChallengeRequired, type MfaChallenge } from "@/entities/auth";
+import { MfaPanel } from "./mfa-panel";
+import { useEffect, useState, type ReactElement } from "react";
 import { Box, Stack } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useLoginMutation, type AuthConfig } from "@/entities/auth";
@@ -19,6 +21,7 @@ export function LoginPanel({
   surface,
 }: LoginPanelProps): ReactElement {
   const loginMutation = useLoginMutation();
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
   const form = useForm<LoginFormValues>({
     mode: "controlled",
     initialValues: createInitialLoginFormValues(authConfig),
@@ -74,8 +77,8 @@ export function LoginPanel({
           csrfPath: values.csrfPath,
         },
       });
-    } catch {
-      // The mutation state is rendered by the form.
+    } catch (error) {
+      if (error instanceof MfaChallengeRequired) setChallenge(error.challenge);
     }
   });
 
@@ -90,16 +93,26 @@ export function LoginPanel({
           <LoginPanelIntro />
         </Stack>
 
-        <LoginPanelForm
-          compact={compact}
-          errorMessage={
-            loginMutation.isError ? loginMutation.error.message : null
-          }
-          form={form}
-          isMockMode={isMockMode}
-          isSubmitting={loginMutation.isPending}
-          onSubmit={handleSubmit}
-        />
+        {challenge ? (
+          <MfaPanel
+            challenge={challenge}
+            onCancel={() => {
+              setChallenge(null);
+              loginMutation.reset();
+            }}
+          />
+        ) : (
+          <LoginPanelForm
+            compact={compact}
+            errorMessage={
+              loginMutation.isError ? loginMutation.error.message : null
+            }
+            form={form}
+            isMockMode={isMockMode}
+            isSubmitting={loginMutation.isPending}
+            onSubmit={handleSubmit}
+          />
+        )}
       </Stack>
     </Box>
   );

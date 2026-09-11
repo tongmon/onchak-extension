@@ -1,4 +1,4 @@
-import type { PropsWithChildren, ReactElement } from "react";
+import { Fragment, type PropsWithChildren, type ReactElement } from "react";
 import { Alert, Badge, Button, Group, Loader, Paper } from "@mantine/core";
 import { defaultAuthConfig, useAuthStateQuery } from "@/entities/auth";
 import { LoginPanel } from "@/features/authenticate-user";
@@ -98,5 +98,10 @@ export function AuthSessionGate({
     );
   }
 
-  return <>{children}</>;
+  const session = authStateQuery.data.session;
+  return (
+    <Fragment key={`${session.apiBaseUrl}|${session.user.email.toLowerCase()}`}>
+      {children}
+    </Fragment>
+  );
 }

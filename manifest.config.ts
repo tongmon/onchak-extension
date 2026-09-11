@@ -25,7 +25,7 @@ export default defineManifest({
     default_popup: "src/app/entrypoints/popup/index.html",
   },
   options_page: "src/app/entrypoints/options/index.html",
-  permissions: ["storage", "scripting", "activeTab"],
+  permissions: ["storage", "scripting", "activeTab", "downloads"],
   host_permissions: [
     "https://zephlyglobal.com/*",
     "https://wing.coupang.com/*",

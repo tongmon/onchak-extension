@@ -1,4 +1,4 @@
-import { useTransition, type ReactElement } from 'react';
+import { useTransition, type ReactElement } from "react";
 import {
   Alert,
   Badge,
@@ -8,12 +8,12 @@ import {
   SimpleGrid,
   Stack,
   Text,
-} from '@mantine/core';
-import { useAuthStateQuery, useLogoutMutation } from '@/entities/auth';
-import { SelectThemePreferenceCard } from '@/features/select-theme-preference';
-import { TogglePageOverlayCard } from '@/features/toggle-page-overlay';
-import { useExtensionSettingsStore } from '@/entities/settings';
-import { ExtensionShell } from '@/shared/ui/extension-shell';
+} from "@mantine/core";
+import { useAuthStateQuery, useLogoutMutation } from "@/entities/auth";
+import { SelectThemePreferenceCard } from "@/features/select-theme-preference";
+import { TogglePageOverlayCard } from "@/features/toggle-page-overlay";
+import { useExtensionSettingsStore } from "@/entities/settings";
+import { ExtensionShell } from "@/shared/ui/extension-shell";
 
 export function OptionsSettingsPage(): ReactElement {
   const authStateQuery = useAuthStateQuery();
@@ -29,7 +29,7 @@ export function OptionsSettingsPage(): ReactElement {
       actions={
         <Group gap="xs">
           <Badge color="teal" radius="xl" variant="light">
-            {session?.user.email ?? 'Authenticated'}
+            {session?.user.email ?? "Authenticated"}
           </Badge>
           <Badge color="teal" radius="xl" variant="light">
             chrome.storage.sync
@@ -40,7 +40,7 @@ export function OptionsSettingsPage(): ReactElement {
           <Button
             loading={logoutMutation.isPending}
             onClick={() => {
-              void logoutMutation.mutateAsync();
+              logoutMutation.mutate();
             }}
             radius="xl"
             size="xs"
@@ -61,6 +61,11 @@ export function OptionsSettingsPage(): ReactElement {
         </Alert>
       ) : null}
 
+      {logoutMutation.error && (
+        <Alert color="red" title="로그아웃 실패">
+          {logoutMutation.error.message}
+        </Alert>
+      )}
       {errorMessage ? (
         <Alert color="red" radius="lg" title="Settings sync issue">
           {errorMessage}
@@ -94,7 +99,7 @@ export function OptionsSettingsPage(): ReactElement {
             <Group justify="space-between">
               <Text fw={700}>Preferences</Text>
               <Badge
-                color={status === 'ready' ? 'teal' : 'gray'}
+                color={status === "ready" ? "teal" : "gray"}
                 radius="xl"
                 variant="dot"
               >
@@ -103,8 +108,8 @@ export function OptionsSettingsPage(): ReactElement {
             </Group>
 
             <Text c="dimmed" size="sm">
-              Reset the shared settings to the starter defaults without
-              touching unrelated extension state.
+              Reset the shared settings to the starter defaults without touching
+              unrelated extension state.
             </Text>
 
             <Button

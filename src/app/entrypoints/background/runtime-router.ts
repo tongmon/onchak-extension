@@ -1,3 +1,4 @@
+import { scopedStorageKey } from '../../../shared/extension/storage/account-scope.ts';
 import {
   extensionStorage,
   getCurrentActiveTab,
@@ -55,7 +56,8 @@ function isMissingReceiverError(error: unknown): boolean {
 }
 
 function getPrimaryContentScriptFile(): string {
-  const contentScriptFile = chrome.runtime.getManifest().content_scripts?.[0]?.js?.[0];
+  const contentScriptFile =
+    chrome.runtime.getManifest().content_scripts?.[0]?.js?.[0];
 
   if (!contentScriptFile) {
     throw new Error('Content script file is not defined in the manifest.');
@@ -65,7 +67,10 @@ function getPrimaryContentScriptFile(): string {
 }
 
 function isDevLoaderScriptFile(contentScriptFile: string): boolean {
-  return contentScriptFile.startsWith('src/') && contentScriptFile.includes('-loader');
+  return (
+    contentScriptFile.startsWith('src/') &&
+    contentScriptFile.includes('-loader')
+  );
 }
 
 async function injectPrimaryContentScript(tabId: number): Promise<void> {
@@ -232,7 +237,9 @@ async function handleGetActiveTabAbrsCoupangPage(): Promise<
 
 async function handleDownloadActiveTabAbrsLedgerFile(
   payload: RuntimeMessageMap['abrs/download-active-tab-ledger-file']['request'],
-): Promise<RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']> {
+): Promise<
+  RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']
+> {
   const result = await downloadAbrsLedgerSlot(payload.slot, payload.targetDate);
 
   if (result.download) {
@@ -242,8 +249,10 @@ async function handleDownloadActiveTabAbrsLedgerFile(
   throw new Error(result.status.error ?? 'Coupang 파일을 가져오지 못했습니다.');
 }
 
-function createAbrsLedgerBatchStorageKey(targetDate: string): string {
-  return `${ABRS_LEDGER_BATCH_STORAGE_PREFIX}${targetDate}`;
+async function createAbrsLedgerBatchStorageKey(
+  targetDate: string,
+): Promise<string> {
+  return scopedStorageKey(`${ABRS_LEDGER_BATCH_STORAGE_PREFIX}${targetDate}`);
 }
 
 function isValidAbrsLedgerTargetDate(value: unknown): value is string {
@@ -253,10 +262,14 @@ function isValidAbrsLedgerTargetDate(value: unknown): value is string {
 async function getStoredAbrsLedgerTargetDate(
   fallbackDate: string,
 ): Promise<RuntimeMessageMap['abrs/get-ledger-target-date']['response']> {
-  const result = (await chrome.storage.local.get([
+  const storageKey = await scopedStorageKey(
     ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY,
-  ])) as Record<string, unknown>;
-  const storedTargetDate = result[ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY];
+  );
+  const result = (await chrome.storage.local.get([storageKey])) as Record<
+    string,
+    unknown
+  >;
+  const storedTargetDate = result[storageKey];
 
   return {
     targetDate: isValidAbrsLedgerTargetDate(storedTargetDate)
@@ -273,7 +286,8 @@ async function setStoredAbrsLedgerTargetDate(
   }
 
   await chrome.storage.local.set({
-    [ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY]: targetDate,
+    [await scopedStorageKey(ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY)]:
+      targetDate,
   });
 
   return { targetDate };
@@ -305,8 +319,11 @@ function normalizeAbrsLedgerBatch(
   };
 }
 
-async function getStoredAbrsLedgerBatch(targetDate: string): Promise<AbrsLedgerBatch> {
-  const storageKey = createAbrsLedgerBatchStorageKey(targetDate);
+async function getStoredAbrsLedgerBatch(
+  targetDate: string,
+  key?: string,
+): Promise<AbrsLedgerBatch> {
+  const storageKey = key ?? (await createAbrsLedgerBatchStorageKey(targetDate));
   const result = (await chrome.storage.local.get([storageKey])) as Record<
     string,
     unknown
@@ -317,6 +334,7 @@ async function getStoredAbrsLedgerBatch(targetDate: string): Promise<AbrsLedgerB
 
 async function setStoredAbrsLedgerBatch(
   batch: AbrsLedgerBatch,
+  key?: string,
 ): Promise<AbrsLedgerBatch> {
   const nextBatch: AbrsLedgerBatch = {
     ...batch,
@@ -324,7 +342,8 @@ async function setStoredAbrsLedgerBatch(
   };
 
   await chrome.storage.local.set({
-    [createAbrsLedgerBatchStorageKey(batch.targetDate)]: nextBatch,
+    [key ?? (await createAbrsLedgerBatchStorageKey(batch.targetDate))]:
+      nextBatch,
   });
 
   return nextBatch;
@@ -334,19 +353,22 @@ function upsertPersistedEntries(
   existingEntries: AbrsLedgerPersistedEntry[],
   incomingEntries: AbrsLedgerPersistedEntry[],
 ): AbrsLedgerPersistedEntry[] {
-  return incomingEntries.reduce<AbrsLedgerPersistedEntry[]>((entries, entry) => {
-    const existingIndex = entries.findIndex(
-      (candidate) => candidate.slot === entry.slot,
-    );
+  return incomingEntries.reduce<AbrsLedgerPersistedEntry[]>(
+    (entries, entry) => {
+      const existingIndex = entries.findIndex(
+        (candidate) => candidate.slot === entry.slot,
+      );
 
-    if (existingIndex >= 0) {
-      const nextEntries = [...entries];
-      nextEntries[existingIndex] = entry;
-      return nextEntries;
-    }
+      if (existingIndex >= 0) {
+        const nextEntries = [...entries];
+        nextEntries[existingIndex] = entry;
+        return nextEntries;
+      }
 
-    return [...entries, entry];
-  }, [...existingEntries]);
+      return [...entries, entry];
+    },
+    [...existingEntries],
+  );
 }
 
 async function handleGetAbrsLedgerBatch(
@@ -358,20 +380,27 @@ async function handleGetAbrsLedgerBatch(
 async function handleSaveAbrsLedgerBatchFiles(
   payload: RuntimeMessageMap['abrs/save-ledger-batch-files']['request'],
 ): Promise<RuntimeMessageMap['abrs/save-ledger-batch-files']['response']> {
-  const currentBatch = await getStoredAbrsLedgerBatch(payload.targetDate);
+  const storageKey = await createAbrsLedgerBatchStorageKey(payload.targetDate);
+  const currentBatch = await getStoredAbrsLedgerBatch(
+    payload.targetDate,
+    storageKey,
+  );
 
-  return setStoredAbrsLedgerBatch({
-    targetDate: payload.targetDate,
-    updatedAt: currentBatch.updatedAt,
-    entries: upsertPersistedEntries(currentBatch.entries, payload.entries),
-  });
+  return setStoredAbrsLedgerBatch(
+    {
+      targetDate: payload.targetDate,
+      updatedAt: currentBatch.updatedAt,
+      entries: upsertPersistedEntries(currentBatch.entries, payload.entries),
+    },
+    storageKey,
+  );
 }
 
 async function handleClearAbrsLedgerBatch(
   payload: RuntimeMessageMap['abrs/clear-ledger-batch']['request'],
 ): Promise<RuntimeMessageMap['abrs/clear-ledger-batch']['response']> {
   await chrome.storage.local.remove(
-    createAbrsLedgerBatchStorageKey(payload.targetDate),
+    await createAbrsLedgerBatchStorageKey(payload.targetDate),
   );
 
   return createEmptyAbrsLedgerBatch(payload.targetDate);
@@ -396,7 +425,9 @@ function isWingTab(tab: chrome.tabs.Tab): boolean {
 function isAdsTab(tab: chrome.tabs.Tab): boolean {
   const hostname = getTabUrl(tab)?.hostname.toLowerCase();
 
-  return hostname === 'advertising.coupang.com' || hostname === 'ads.coupang.com';
+  return (
+    hostname === 'advertising.coupang.com' || hostname === 'ads.coupang.com'
+  );
 }
 
 function isAdsLoginTab(tab: chrome.tabs.Tab): boolean {
@@ -410,7 +441,8 @@ function isAdsLoginTab(tab: chrome.tabs.Tab): boolean {
   const pathname = url.pathname.toLowerCase();
 
   return (
-    (hostname === 'advertising.coupang.com' || hostname === 'ads.coupang.com') &&
+    (hostname === 'advertising.coupang.com' ||
+      hostname === 'ads.coupang.com') &&
     pathname.startsWith('/user/login')
   );
 }
@@ -492,7 +524,9 @@ async function handleDownloadCachedAbrsLedgerFile(
   payload: RuntimeMessageMap['abrs/download-cached-ledger-file']['request'],
 ): Promise<RuntimeMessageMap['abrs/download-cached-ledger-file']['response']> {
   const batch = await getStoredAbrsLedgerBatch(payload.targetDate);
-  const entry = batch.entries.find((candidate) => candidate.slot === payload.slot);
+  const entry = batch.entries.find(
+    (candidate) => candidate.slot === payload.slot,
+  );
 
   if (!entry) {
     throw new Error('저장된 장부 파일을 찾지 못했습니다.');
@@ -520,7 +554,9 @@ async function findAbrsTabForSlot(
 
   const tabs = await chrome.tabs.query({});
 
-  return tabs.find((tab) => tab.id && isTabUsableForAbrsSlot(tab, slot)) ?? null;
+  return (
+    tabs.find((tab) => tab.id && isTabUsableForAbrsSlot(tab, slot)) ?? null
+  );
 }
 
 async function waitForTabReady(tabId: number): Promise<void> {
@@ -817,7 +853,11 @@ async function downloadAbrsLedgerSlot(
 async function handleDownloadAllAbrsLedgerFiles(
   payload: RuntimeMessageMap['abrs/download-all-ledger-files']['request'],
 ): Promise<RuntimeMessageMap['abrs/download-all-ledger-files']['response']> {
-  const currentBatch = await getStoredAbrsLedgerBatch(payload.targetDate);
+  const storageKey = await createAbrsLedgerBatchStorageKey(payload.targetDate);
+  const currentBatch = await getStoredAbrsLedgerBatch(
+    payload.targetDate,
+    storageKey,
+  );
   const downloads: AbrsCoupangLedgerDownload[] = [];
   const statuses: AbrsLedgerDownloadSlotStatus[] = [];
 
@@ -837,11 +877,14 @@ async function handleDownloadAllAbrsLedgerFiles(
   });
   const batch =
     downloads.length > 0
-      ? await setStoredAbrsLedgerBatch({
-          targetDate: payload.targetDate,
-          updatedAt: currentBatch.updatedAt,
-          entries,
-        })
+      ? await setStoredAbrsLedgerBatch(
+          {
+            targetDate: payload.targetDate,
+            updatedAt: currentBatch.updatedAt,
+            entries,
+          },
+          storageKey,
+        )
       : currentBatch;
 
   return {
@@ -879,7 +922,8 @@ async function handleRuntimeMessage(
       }
 
       return handleSetActiveTabOverlay(
-        (message as RuntimeMessage<'page/set-active-tab-overlay'>).payload.enabled,
+        (message as RuntimeMessage<'page/set-active-tab-overlay'>).payload
+          .enabled,
       );
 
     case 'abrs/get-active-tab-coupang-page':
@@ -887,11 +931,14 @@ async function handleRuntimeMessage(
 
     case 'abrs/download-active-tab-ledger-file':
       if (!message.payload) {
-        throw new Error('Missing payload for abrs/download-active-tab-ledger-file.');
+        throw new Error(
+          'Missing payload for abrs/download-active-tab-ledger-file.',
+        );
       }
 
       return handleDownloadActiveTabAbrsLedgerFile(
-        (message as RuntimeMessage<'abrs/download-active-tab-ledger-file'>).payload,
+        (message as RuntimeMessage<'abrs/download-active-tab-ledger-file'>)
+          .payload,
       );
 
     case 'abrs/get-ledger-batch':
@@ -932,7 +979,9 @@ async function handleRuntimeMessage(
 
     case 'abrs/download-cached-ledger-file':
       if (!message.payload) {
-        throw new Error('Missing payload for abrs/download-cached-ledger-file.');
+        throw new Error(
+          'Missing payload for abrs/download-cached-ledger-file.',
+        );
       }
 
       return handleDownloadCachedAbrsLedgerFile(

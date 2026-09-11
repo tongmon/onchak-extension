@@ -1,10 +1,13 @@
 export {
   authStateQueryKey,
   useAuthStateQuery,
-} from './api/get-auth-state-query';
-export { useLoginMutation, type LoginMutationVariables } from './api/login-mutation';
-export { useLogoutMutation } from './api/logout-mutation';
-export { authStorage } from './model/auth-storage';
+} from "./api/get-auth-state-query";
+export {
+  useLoginMutation,
+  type LoginMutationVariables,
+} from "./api/login-mutation";
+export { useLogoutMutation } from "./api/logout-mutation";
+export { authStorage } from "./model/auth-storage";
 export {
   defaultAuthConfig,
   normalizeAuthConfig,
@@ -14,4 +17,17 @@ export {
   type AuthState,
   type AuthUser,
   type LoginCredentials,
-} from './model/schema';
+} from "./model/schema";
+
+export {
+  authenticatedFetch,
+  readSuccessJson,
+  requireRemoteSession,
+} from "./api/session-client";
+
+export {
+  MfaChallengeRequired,
+  completeMfaLogin,
+  prepareMfaEnrollment,
+  type MfaChallenge,
+} from "./api/auth-client";

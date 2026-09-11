@@ -24,6 +24,7 @@ const SUCCESS_POPUP_FADE_MS = 600;
 
 interface PopupMarginResultPageProps {
   isLoggingOut: boolean;
+  logoutError?: string;
   result: PopupMarginCalculationResult;
   onBack: () => void;
   onLogout: () => void;
@@ -93,6 +94,7 @@ function MetricCard({
 
 export function PopupMarginResultPage({
   isLoggingOut,
+  logoutError,
   onBack,
   onLogout,
   result,
@@ -111,6 +113,7 @@ export function PopupMarginResultPage({
   }, []);
 
   const handleUploadResult = async () => {
+    if (uploadResultMutation.isPending || hasUploadedResult) return;
     if (uploadSuccessTimerRef.current !== null) {
       window.clearTimeout(uploadSuccessTimerRef.current);
     }
@@ -137,6 +140,11 @@ export function PopupMarginResultPage({
   return (
     <Box mih="100dvh" px="md" py="md">
       <Stack gap="md">
+        {logoutError && (
+          <Alert color="red" title="로그아웃 실패">
+            {logoutError}
+          </Alert>
+        )}
         <Paper p="md" radius="md" shadow="sm" withBorder>
           <Stack gap="sm">
             <Group align="flex-start" justify="space-between">
@@ -192,7 +200,7 @@ export function PopupMarginResultPage({
             value={formatPercentPoint(result.marginRate)}
           />
           <MetricCard
-            description="공식: (11000 / 마진율) / 10000"
+            description="광고비 대비 매출 비율 · 마진이 0 이하이면 계산 불가"
             label="최소 광고 수익률"
             tone="primary"
             value={formatRatioPercent(result.minimumAdvertisingReturn)}
@@ -235,8 +243,13 @@ export function PopupMarginResultPage({
             value={formatWon(result.averagePrice)}
           />
           <MetricCard
+            description="최근 28일 조회수 × 가정 전환율 3%"
             label="예상 월 판매량"
             value={formatCount(result.expectedMonthlySales)}
+          />
+          <MetricCard
+            label="예상 월 매출"
+            value={formatWon(result.expectedMonthlyRevenue)}
           />
           <MetricCard
             label="예상 월 마진"

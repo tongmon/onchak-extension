@@ -1,21 +1,22 @@
-import type { PopupFormValues } from './popup-home-form';
-import { normalizeProductUrls } from './popup-home-form.ts';
+import { scopedStorageKey } from "../../../shared/extension/storage/account-scope.ts";
+import type { PopupFormValues } from "./popup-home-form";
+import { normalizeProductUrls } from "./popup-home-form.ts";
 
-export const POPUP_MARGIN_DRAFT_STORAGE_KEY = 'popupMarginCalculatorDraft';
+export const POPUP_MARGIN_DRAFT_STORAGE_KEY = "popupMarginCalculatorDraft";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeDraftField(
   value: unknown,
   fallback: string | number,
 ): string {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return value;
   }
 
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return String(value);
   }
 
@@ -31,9 +32,9 @@ function normalizeDraftProductUrls(
   }
 
   const legacyProductUrl =
-    typeof draft.productUrl === 'string'
+    typeof draft.productUrl === "string"
       ? draft.productUrl
-      : typeof draft.productSourceUrl === 'string'
+      : typeof draft.productSourceUrl === "string"
         ? draft.productSourceUrl
         : null;
 
@@ -52,8 +53,8 @@ export function normalizePopupMarginDraft(
 
   return {
     productionCostCurrency:
-      draft.productionCostCurrency === 'krw' ||
-      draft.productionCostCurrency === 'cny'
+      draft.productionCostCurrency === "krw" ||
+      draft.productionCostCurrency === "cny"
         ? draft.productionCostCurrency
         : fallback.productionCostCurrency,
     productionCost: normalizeDraftField(
@@ -87,20 +88,20 @@ export function normalizePopupMarginDraft(
 export async function loadPopupMarginDraft(
   fallback: PopupFormValues,
 ): Promise<PopupFormValues> {
-  const stored = (await chrome.storage.local.get([
-    POPUP_MARGIN_DRAFT_STORAGE_KEY,
-  ])) as Record<string, unknown>;
+  const key = await scopedStorageKey(POPUP_MARGIN_DRAFT_STORAGE_KEY);
+  const stored = (await chrome.storage.local.get([key])) as Record<
+    string,
+    unknown
+  >;
 
-  return normalizePopupMarginDraft(
-    stored[POPUP_MARGIN_DRAFT_STORAGE_KEY],
-    fallback,
-  );
+  return normalizePopupMarginDraft(stored[key], fallback);
 }
 
 export async function savePopupMarginDraft(
   values: PopupFormValues,
 ): Promise<void> {
   await chrome.storage.local.set({
-    [POPUP_MARGIN_DRAFT_STORAGE_KEY]: normalizePopupMarginDraft(values, values),
+    [await scopedStorageKey(POPUP_MARGIN_DRAFT_STORAGE_KEY)]:
+      normalizePopupMarginDraft(values, values),
   });
 }

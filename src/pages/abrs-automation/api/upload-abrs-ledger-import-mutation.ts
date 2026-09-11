@@ -1,118 +1,117 @@
-import { useMutation } from '@tanstack/react-query';
-import { authStorage } from '@/entities/auth';
+import { scopedStorageKey } from "../../../shared/extension/storage/account-scope";
+import { useMutation } from "@tanstack/react-query";
+import {
+  authenticatedFetch,
+  readSuccessJson,
+  requireRemoteSession,
+} from "@/entities/auth";
 import {
   abrsLedgerImportPath,
   buildAbrsLedgerImportFormData,
-  buildAbrsLedgerImportUrl,
-  createAbrsLedgerImportHeaders,
-  extractAbrsLedgerImportErrorMessage,
-} from './abrs-ledger-import-request';
+} from "./abrs-ledger-import-request";
 import {
   createAbrsLedgerBatchName,
   validateAbrsLedgerFiles,
   type AbrsLedgerFileEntry,
-} from '../model/abrs-ledger-files';
+} from "../model/abrs-ledger-files";
 
 export interface UploadAbrsLedgerImportMutationVariables {
   targetDate: string;
   entries: AbrsLedgerFileEntry[];
 }
-
 export interface UploadAbrsLedgerImportMutationResult {
   batchName: string;
-  response: unknown;
+  response: Record<string, unknown>;
   url: string;
+  reviewUrl: string;
+  workflow: Record<string, unknown> | null;
 }
-
-const MISSING_LOGIN_SESSION_MESSAGE =
-  '로그인 세션을 찾을 수 없습니다. 다시 로그인한 뒤 업로드해주세요.';
-
-const MISSING_ACCESS_TOKEN_MESSAGE =
-  '인증 토큰을 찾을 수 없습니다. 다시 로그인한 뒤 업로드해주세요.';
-
-const EXPIRED_LOGIN_SESSION_MESSAGE =
-  '로그인 세션이 만료되었습니다. 다시 로그인한 뒤 업로드해주세요.';
-
-async function parseResponseJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
-}
-
 export async function uploadAbrsLedgerImport({
   targetDate,
   entries,
 }: UploadAbrsLedgerImportMutationVariables): Promise<UploadAbrsLedgerImportMutationResult> {
   const validation = validateAbrsLedgerFiles(entries, targetDate);
-
-  if (!validation.ok) {
-    throw new Error(validation.messages.join('\n'));
-  }
-
-  const [config, session] = await Promise.all([
-    authStorage.getConfig(),
-    authStorage.getSession(),
-  ]);
-
-  if (!session) {
-    throw new Error(MISSING_LOGIN_SESSION_MESSAGE);
-  }
-
-  if (!session.accessToken) {
-    throw new Error(MISSING_ACCESS_TOKEN_MESSAGE);
-  }
-
+  if (!validation.ok) throw new Error(validation.messages.join("\n"));
+  const { config, session } = await requireRemoteSession();
   const batchName = createAbrsLedgerBatchName(targetDate);
-  const url = buildAbrsLedgerImportUrl(config.apiBaseUrl, abrsLedgerImportPath);
-  const response = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: createAbrsLedgerImportHeaders({
-      accessToken: session.accessToken,
-      csrfToken: session.csrfToken,
-      tokenType: session.tokenType,
+  const batchKey = await scopedStorageKey(`abrsLedgerBatch:${targetDate}`);
+  const receiptKey = await scopedStorageKey(`abrsReceipt:${targetDate}`);
+  const fingerprints = await Promise.all(
+    entries.map(async (entry) => {
+      const hash = await crypto.subtle.digest(
+        "SHA-256",
+        await entry.file.arrayBuffer(),
+      );
+      return `${entry.slot}:${entry.file.name}:${Array.from(
+        new Uint8Array(hash),
+      )
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")}`;
     }),
-    body: buildAbrsLedgerImportFormData({
-      targetDate,
-      batchName,
-      entries,
-    }),
-  });
-  const responsePayload = await parseResponseJson(response);
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      await authStorage.clearSession();
-      throw new Error(EXPIRED_LOGIN_SESSION_MESSAGE);
-    }
-
+  );
+  const fingerprint = fingerprints.sort().join("|");
+  const receipt = (await chrome.storage.local.get(receiptKey))[receiptKey] as
+    | { fingerprint: string; response: Record<string, unknown> }
+    | undefined;
+  const hasPendingBatch = !!(await chrome.storage.local.get(batchKey))[batchKey];
+  const response =
+    !hasPendingBatch && receipt?.fingerprint === fingerprint
+      ? receipt.response
+      : await readSuccessJson(
+          await authenticatedFetch(
+            abrsLedgerImportPath,
+            {
+              method: "POST",
+              body: buildAbrsLedgerImportFormData({
+                targetDate,
+                batchName,
+                entries,
+              }),
+            },
+            120000,
+            session.accessToken,
+          ),
+        );
+  if (
+    typeof response.importId !== "string" ||
+    !response.importId ||
+    typeof response.status !== "string" ||
+    !response.status
+  ) {
     throw new Error(
-      extractAbrsLedgerImportErrorMessage(
-        responsePayload,
-        `Ledger import failed with status ${response.status}.`,
-      ),
+      "장부 접수 번호를 확인하지 못했습니다. 첨부 파일은 보관되어 있습니다. 웹에서 접수 여부를 확인해 주세요.",
     );
   }
-
+  await chrome.storage.local.set({ [receiptKey]: { fingerprint, response } });
+  await chrome.storage.local.remove(batchKey);
+  let workflow: Record<string, unknown> | null = null;
+  // Reception is already confirmed. A failed follow-up must not encourage another upload.
+  try {
+    workflow = await readSuccessJson(
+      await authenticatedFetch(
+        `/api/ledger/imports/${encodeURIComponent(response.importId)}/workflow`,
+      ),
+    );
+  } catch {
+    /* web link remains available */
+  }
+  const query = new URLSearchParams({
+    date: targetDate,
+    importId: response.importId,
+  });
   return {
     batchName,
-    response: responsePayload,
-    url,
+    response,
+    workflow,
+    url: `${config.apiBaseUrl}${abrsLedgerImportPath}`,
+    reviewUrl: `${config.apiBaseUrl === "http://localhost:8080" ? "http://localhost:5173" : config.apiBaseUrl}/app/ledger-writing?${query}`,
   };
 }
-
 export function useUploadAbrsLedgerImportMutation() {
   return useMutation({
-    mutationKey: ['abrs-ledger-import', 'upload'],
-    networkMode: 'always',
+    mutationKey: ["abrs", "ledger-import", "upload"],
+    networkMode: "always",
+    retry: false,
     mutationFn: uploadAbrsLedgerImport,
   });
 }
