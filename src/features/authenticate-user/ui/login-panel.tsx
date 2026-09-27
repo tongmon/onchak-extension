@@ -90,7 +90,7 @@ export function LoginPanel({
         mih="calc(100dvh - var(--mantine-spacing-md) * 2)"
       >
         <Stack align="center" gap={0}>
-          <LoginPanelIntro />
+          <LoginPanelIntro apiBaseUrl={authConfig.apiBaseUrl} />
         </Stack>
 
         {challenge ? (
