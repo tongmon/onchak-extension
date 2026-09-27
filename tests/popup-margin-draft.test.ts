@@ -12,7 +12,7 @@ const fallback = {
   salesCommission: '10.8',
   coupangProductCost: '',
   inboundOutboundShippingFee: '',
-  exchangeRate: '352',
+  exchangeRate: '319',
 };
 
 test('normalizePopupMarginDraft restores cached margin calculator inputs', () => {

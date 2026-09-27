@@ -1,7 +1,8 @@
 export type ExtensionColorScheme = "auto" | "light" | "dark";
 export type ProductionCostCurrency = "cny" | "krw";
 
-export const DEFAULT_EXCHANGE_RATE = 352;
+// 쿠패스 기준 단가 290원에 부가세 10%를 포함한 최종 적용 금액.
+export const DEFAULT_EXCHANGE_RATE = 319;
 
 export interface ExtensionSettings {
   colorScheme: ExtensionColorScheme;
