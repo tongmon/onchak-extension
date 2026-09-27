@@ -6,6 +6,7 @@ import {
 export type { ProductionCostCurrency };
 
 export interface PopupFormValues {
+  productName: string;
   productionCostCurrency: ProductionCostCurrency;
   productionCost: string | number;
   productUrlInput: string;
@@ -58,6 +59,7 @@ export function createInitialPopupFormValues(values: {
   );
 
   return {
+    productName: '',
     productionCostCurrency: values.productionCostCurrency,
     productionCost: values.productionCost,
     productUrlInput: '',

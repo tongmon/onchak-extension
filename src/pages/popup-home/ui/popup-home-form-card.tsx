@@ -63,6 +63,14 @@ export function PopupHomeFormCard({
     <Paper p="lg" radius="xl" shadow="sm" withBorder>
       <form onSubmit={onSubmit}>
         <Stack gap="md">
+          <TextInput
+            key={form.key('productName')}
+            label="소싱 상품명 (선택)"
+            description="검색어와 구분되는 실제 상품명입니다. 모르면 비워 두세요."
+            maxLength={500}
+            disabled={isSubmitting}
+            {...form.getInputProps('productName')}
+          />
           <Stack gap={4}>
             <Text fw={500} size="sm">
               상품 매입 원가 통화

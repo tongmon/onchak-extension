@@ -5,6 +5,7 @@ import type {
 import type { ProductionCostCurrency } from "./popup-home-form";
 
 export interface PopupMarginCalculationInputs {
+  productName?: string;
   productionCostCurrency: ProductionCostCurrency;
   productionCost: number;
   productUrls: string[];
@@ -15,6 +16,7 @@ export interface PopupMarginCalculationInputs {
 }
 
 export interface PopupMarginCalculationResult {
+  productName?: string | null;
   schemaVersion: 2;
   calculationVersion: "SOURCING_MARGIN_V2";
   capturedAt: string;
@@ -161,6 +163,7 @@ export function createPopupMarginCalculationResult({
     value === null ? null : Number(value.toFixed(scale));
   return {
     schemaVersion: 2,
+    productName: inputs.productName?.trim() || null,
     calculationVersion: "SOURCING_MARGIN_V2",
     capturedAt: new Date().toISOString(),
     clientResultId: crypto.randomUUID(),

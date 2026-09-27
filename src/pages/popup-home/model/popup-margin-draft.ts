@@ -52,6 +52,7 @@ export function normalizePopupMarginDraft(
   const draft = isRecord(value) ? value : {};
 
   return {
+    productName: typeof draft.productName === 'string' ? draft.productName : '',
     productionCostCurrency:
       draft.productionCostCurrency === "krw" ||
       draft.productionCostCurrency === "cny"

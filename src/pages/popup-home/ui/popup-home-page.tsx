@@ -218,6 +218,7 @@ export function PopupHomePage(): ReactElement {
     }
 
     const normalizedValues = {
+      productName: values.productName.trim(),
       productionCostCurrency: values.productionCostCurrency,
       productionCost: stringifyFieldValue(values.productionCost),
       productUrlInput: "",
@@ -248,6 +249,7 @@ export function PopupHomePage(): ReactElement {
       if (!mounted.current) return;
       const nextResult = createPopupMarginCalculationResult({
         inputs: {
+          productName: normalizedValues.productName,
           productionCostCurrency: values.productionCostCurrency,
           productionCost,
           productUrls: normalizedProductUrls,

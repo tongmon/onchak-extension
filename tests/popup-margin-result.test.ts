@@ -192,3 +192,27 @@ test("extension estimates match sourcing V2 units and distinguish monthly profit
   assert.equal(loss.margin, -1945924);
   assert.equal(loss.minimumAdvertisingReturn, null);
 });
+
+test('SCRUM-297 expect/actual keeps explicit product identity and never promotes a search result name', async () => {
+  const { readFileSync } = await import('node:fs');
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/scrum297-input.json', import.meta.url), 'utf8'));
+  const actual = createPopupMarginCalculationResult(fixture);
+  assert.equal(actual.productName, '접이식 수납함 32L');
+  assert.equal(actual.searchKeyword, '수납함');
+  assert.deepEqual(actual.categories, ['생활용품 > 수납', '가구 > 정리함']);
+  assert.deepEqual(actual.productUrls, ['https://detail.1688.com/offer/297001.html', 'https://detail.1688.com/offer/297002.html?sku=blue']);
+  assert.equal(actual.productionCost, 16.8);
+  assert.equal(actual.expectedSalePrice, 23000);
+  assert.equal(actual.productionCostCurrency, 'cny');
+  assert.equal(actual.exchangeRate, 195.71);
+  const withoutName = createPopupMarginCalculationResult({ ...fixture, inputs: { ...fixture.inputs, productName: '' } });
+  assert.equal(withoutName.productName, null);
+  assert.notEqual(withoutName.productName, fixture.snapshot.popularItems[0].name);
+  assert.notEqual(actual.clientResultId, withoutName.clientResultId);
+});
+
+test('calculator link carries the returned record ID in the correct environment', async () => {
+  const { marginReviewUrl } = await import('../src/pages/popup-home/model/margin-review-url.ts');
+  assert.equal(marginReviewUrl('https://zephlyglobal.com', 'MR-297'), 'https://zephlyglobal.com/app/margin-results?marginResultId=MR-297');
+  assert.equal(marginReviewUrl('http://localhost:8080', 'MR-297'), 'http://localhost:5173/app/margin-results?marginResultId=MR-297');
+});

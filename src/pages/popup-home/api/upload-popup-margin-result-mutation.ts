@@ -6,6 +6,7 @@ import {
   requireRemoteSession,
 } from "@/entities/auth";
 import type { PopupMarginCalculationResult } from "../model/popup-margin-result";
+import { marginReviewUrl } from '../model/margin-review-url';
 
 export const popupMarginResultUploadPath = "/api/margin-results";
 export interface UploadPopupMarginResultRequest {
@@ -17,6 +18,7 @@ export interface UploadPopupMarginResultMutationVariables {
   result: PopupMarginCalculationResult;
 }
 export interface UploadPopupMarginResultMutationResult {
+  reviewUrl: string;
   request: UploadPopupMarginResultRequest;
   response: unknown;
   url: string;
@@ -55,6 +57,7 @@ export async function uploadPopupMarginResult({
   }
   await chrome.storage.local.remove(pendingKey);
   return {
+    reviewUrl: marginReviewUrl(config.apiBaseUrl, response.id),
     request,
     response,
     url: `${config.apiBaseUrl}${popupMarginResultUploadPath}`,

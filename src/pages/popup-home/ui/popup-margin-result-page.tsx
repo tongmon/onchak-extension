@@ -101,6 +101,7 @@ export function PopupMarginResultPage({
 }: PopupMarginResultPageProps): ReactElement {
   const uploadResultMutation = useUploadPopupMarginResultMutation();
   const [hasUploadedResult, setHasUploadedResult] = useState(false);
+  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [isUploadSuccessVisible, setUploadSuccessVisible] = useState(false);
   const uploadSuccessTimerRef = useRef<number | null>(null);
 
@@ -119,7 +120,8 @@ export function PopupMarginResultPage({
     }
 
     try {
-      await uploadResultMutation.mutateAsync({ result });
+      const uploaded = await uploadResultMutation.mutateAsync({ result });
+      setReviewUrl(uploaded.reviewUrl);
     } catch {
       return;
     }
@@ -189,6 +191,7 @@ export function PopupMarginResultPage({
         </Paper>
 
         <SimpleGrid cols={1} spacing="xs">
+          <MetricCard label="소싱 상품명" value={result.productName || '미입력'} />
           <MetricCard
             label="마진"
             tone="primary"
@@ -270,6 +273,11 @@ export function PopupMarginResultPage({
           >
             결과 서버 업로드
           </Button>
+          {reviewUrl ? (
+            <Button component="a" href={reviewUrl} target="_blank" rel="noreferrer" variant="light">
+              저장한 기록으로 마진 계산기 열기
+            </Button>
+          ) : null}
         </SimpleGrid>
       </Stack>
 

@@ -4,6 +4,7 @@ import { normalizePopupMarginDraft } from '../src/pages/popup-home/model/popup-m
 import { normalizeExtensionSettings } from '../src/shared/extension/storage/schema.ts';
 
 const fallback = {
+  productName: '',
   productionCostCurrency: 'cny' as const,
   productionCost: '',
   productUrlInput: '',
@@ -29,6 +30,7 @@ test('normalizePopupMarginDraft restores cached margin calculator inputs', () =>
   );
 
   assert.deepEqual(draft, {
+    productName: '',
     productionCostCurrency: 'krw',
     productionCost: '12500',
     productUrlInput: '',
@@ -72,4 +74,9 @@ test('normalizeExtensionSettings preserves an explicitly cleared product url lis
 
   assert.equal(settings.productUrl, '');
   assert.deepEqual(settings.productUrls, []);
+});
+
+test('product names survive drafts and legacy drafts never invent one', () => {
+  assert.equal(normalizePopupMarginDraft({ productName: '접이식 수납함' }, fallback).productName, '접이식 수납함');
+  assert.equal(normalizePopupMarginDraft({ searchKeyword: '수납함' }, fallback).productName, '');
 });

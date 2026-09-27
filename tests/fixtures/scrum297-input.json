@@ -1,0 +1,53 @@
+{
+  "inputs": {
+    "productName": "접이식 수납함 32L",
+    "productionCostCurrency": "cny",
+    "productionCost": 16.8,
+    "productUrls": [
+      "https://detail.1688.com/offer/297001.html",
+      "https://detail.1688.com/offer/297002.html?sku=blue"
+    ],
+    "salesCommission": 10.8,
+    "coupangProductCost": 23000,
+    "inboundOutboundShippingFee": 4000,
+    "exchangeRate": 195.71
+  },
+  "snapshot": {
+    "searchKeyword": "수납함",
+    "averageCost": 19000,
+    "costRange": [
+      18000,
+      20000
+    ],
+    "popularItems": [
+      {
+        "imgUrl": "",
+        "name": "검색 결과 상품 A",
+        "category": "생활용품 > 수납",
+        "brand": "",
+        "manufacturer": "",
+        "rating": 4,
+        "review": 1,
+        "cost": 19000,
+        "views": [
+          10000,
+          12000
+        ]
+      },
+      {
+        "imgUrl": "",
+        "name": "검색 결과 상품 B",
+        "category": "가구 > 정리함",
+        "brand": "",
+        "manufacturer": "",
+        "rating": 4,
+        "review": 1,
+        "cost": 20000,
+        "views": [
+          8000,
+          10000
+        ]
+      }
+    ]
+  }
+}
