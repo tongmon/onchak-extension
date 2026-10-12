@@ -4,7 +4,9 @@ import {
   messageSuccess,
   type TabMessage,
   type TabMessageMap,
+  normalizeAbrsCoupangDownloads,
 } from '@/shared/extension';
+import { stampAbrsCoupangDownloads } from '../../../pages/abrs-automation/model/abrs-ledger-seller';
 import {
   getDomSnapshot,
   getOverlayEnabled,
@@ -14,6 +16,7 @@ import {
   downloadAbrsCoupangLedgerFile,
   getAbrsCoupangPageSnapshot,
 } from './abrs-coupang-page';
+import { collectCoupangReports } from './abrs-coupang-reports';
 import { extractPopularSearchSnapshot } from './popular-search-parser';
 
 async function syncOverlayFromStorage(): Promise<void> {
@@ -54,9 +57,25 @@ async function handleTabMessage(
         throw new Error('Missing payload for abrs/download-ledger-file.');
       }
 
-      return downloadAbrsCoupangLedgerFile(
-        (message as TabMessage<'abrs/download-ledger-file'>).payload,
-      );
+      {
+        const request = (message as TabMessage<'abrs/download-ledger-file'>).payload;
+        const wing = window.location.hostname === 'wing.coupang.com';
+        const before = getAbrsCoupangPageSnapshot().sellerId;
+        if (wing && (!before || request.expectedSellerId && before !== request.expectedSellerId)) {
+          throw new Error('현재 Wing 판매자가 선택한 판매자와 다르거나 확인되지 않습니다. 같은 판매자로 로그인 후 새로고침해 주세요.');
+        }
+        let result;
+        if (
+          ['inventoryHealth', 'salesStatistics', 'dailySettlement', 'productList'].includes(request.slot)
+        ) {
+          result = await downloadAbrsCoupangLedgerFile(request);
+        } else {
+          result = await collectCoupangReports(request);
+        }
+        const downloads = stampAbrsCoupangDownloads(normalizeAbrsCoupangDownloads(result),
+          request.expectedSellerId, before, getAbrsCoupangPageSnapshot().sellerId, wing);
+        return downloads.length === 1 ? downloads[0] : downloads;
+      }
 
     default:
       throw new Error(`Unsupported tab message: ${String(message)}`);

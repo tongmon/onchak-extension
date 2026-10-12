@@ -1,23 +1,41 @@
-import { scopedStorageKey } from '../../../shared/extension/storage/account-scope.ts';
+import { removeAccountScopedValue, scopedStorageKey } from '../../../shared/extension/storage/account-scope.ts';
 import {
   extensionStorage,
   getCurrentActiveTab,
   messageFailure,
   messageSuccess,
+  normalizeAbrsCoupangDownloads,
+  resolveAbrsLedgerPeriod,
   sendTabMessage,
   type ActiveTabSnapshot,
   type AbrsCoupangLedgerDownload,
+  type AbrsCoupangLedgerDownloadRequest,
   type AbrsCoupangLedgerDownloadSlot,
   type AbrsLedgerBatch,
   type AbrsLedgerDownloadSlotStatus,
-  type AbrsLedgerPersistedEntry,
+  type AbrsLedgerPeriodRequest,
   type RuntimeMessage,
   type RuntimeMessageMap,
   type TabMessage,
   type TabMessageMap,
   type TabMessageType,
 } from '@/shared/extension';
-import { upsertAbrsLedgerPersistedDownloads } from '@/pages/abrs-automation/model/abrs-ledger-batch-cache';
+import {
+  upsertAbrsLedgerPersistedDownloads,
+  upsertAbrsLedgerPersistedEntries,
+  retainUnacknowledgedAbrsLedgerEntries,
+} from '@/pages/abrs-automation/model/abrs-ledger-batch-cache';
+import {
+  getAbrsLedgerBatchValue,
+  setAbrsLedgerBatchValue,
+  removeAbrsLedgerBatchValue,
+  serializeAbrsLedgerBatchOperation,
+} from '@/pages/abrs-automation/model/abrs-ledger-batch-store';
+import { createAbrsLedgerCachedDownloadUrl, isAbrsLedgerXlsxPayload } from '@/pages/abrs-automation/api/abrs-coupang-download-file';
+import { getAbrsRequiredLedgerSlots } from '@/pages/abrs-automation/model/abrs-ledger-files';
+import { normalizeAbrsSellerId, resolveAbrsLedgerSellerId } from '@/pages/abrs-automation/model/abrs-ledger-seller';
+import { downloadAbrsCoupangOriginal, validateAbrsCoupangOriginalRequest } from '../../../shared/extension/coupang-original-download.ts';
+import { filterAbrsLedgerEntriesForReplacement } from './abrs-ledger-replacements.ts';
 
 const CONTENT_SCRIPT_REFRESH_REQUIRED_MESSAGE =
   '현재 탭에 content script가 연결되지 않았습니다. 탭을 새로고침한 뒤 다시 시도해주세요.';
@@ -31,8 +49,17 @@ const ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY =
 const ABRS_LEDGER_DOWNLOAD_SLOTS: AbrsCoupangLedgerDownloadSlot[] = [
   'inventoryHealth',
   'salesStatistics',
-  'dailySettlement',
+  'adPerformance',
   'productList',
+  'CATEGORY_TR',
+  'WAREHOUSING_SHIPPING',
+  'STORAGE_FEE',
+  'CRETURN_PICKUP_RESTOCKING',
+  'VRETURN_HANDLING',
+  'VRETURN_SHIPPING',
+  'INVENTORY_COMPENSATION',
+  'VALUE_ADDED_SERVICE_FEE',
+  'PPIR',
 ];
 const WING_LEDGER_START_URL =
   'https://wing.coupang.com/tenants/rfm-inventory/management/list';
@@ -235,24 +262,49 @@ async function handleGetActiveTabAbrsCoupangPage(): Promise<
   });
 }
 
+async function handleGetWingSeller(): Promise<{ sellerId: string }> {
+  const tabs = (await chrome.tabs.query({})).filter((tab) => tab.id && isWingTab(tab));
+  const sellers = new Set<string>();
+  for (const tab of tabs) {
+    try {
+      const page = await sendTabMessageWithRecovery(tab.id!, { type: 'abrs/get-coupang-page' });
+      const seller = normalizeAbrsSellerId(page.sellerId);
+      if (seller) sellers.add(seller);
+    } catch { /* A disconnected or login tab cannot identify the active seller. */ }
+  }
+  if (sellers.size !== 1) throw new Error('쿠팡 판매자 계정을 한 개로 확인할 수 없습니다. Wing에 로그인하고 열린 Wing 탭을 새로고침해 주세요.');
+  return { sellerId: [...sellers][0] };
+}
+
 async function handleDownloadActiveTabAbrsLedgerFile(
   payload: RuntimeMessageMap['abrs/download-active-tab-ledger-file']['request'],
 ): Promise<
   RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']
 > {
-  const result = await downloadAbrsLedgerSlot(payload.slot, payload.targetDate);
+  const result = await downloadAbrsLedgerSlot(payload);
 
-  if (result.download) {
-    return result.download;
+  if (result.downloads.length > 0) {
+    return result.downloads.length === 1 ? result.downloads[0] : result.downloads;
   }
 
   throw new Error(result.status.error ?? 'Coupang 파일을 가져오지 못했습니다.');
 }
 
+function createAbrsLedgerBatchKey(
+  targetDate: string,
+  period?: Pick<AbrsLedgerPeriodRequest, 'periodStart' | 'periodEnd'>,
+): string {
+  const { start, end } = resolveAbrsLedgerPeriod({ targetDate, ...period });
+  const periodKey =
+    start === targetDate && end === targetDate ? targetDate : `${start}~${end}`;
+  return `${ABRS_LEDGER_BATCH_STORAGE_PREFIX}${periodKey}`;
+}
+
 async function createAbrsLedgerBatchStorageKey(
   targetDate: string,
+  period?: Pick<AbrsLedgerPeriodRequest, 'periodStart' | 'periodEnd'>,
 ): Promise<string> {
-  return scopedStorageKey(`${ABRS_LEDGER_BATCH_STORAGE_PREFIX}${targetDate}`);
+  return scopedStorageKey(createAbrsLedgerBatchKey(targetDate, period));
 }
 
 function isValidAbrsLedgerTargetDate(value: unknown): value is string {
@@ -269,17 +321,21 @@ async function getStoredAbrsLedgerTargetDate(
     string,
     unknown
   >;
-  const storedTargetDate = result[storageKey];
+  const stored = result[storageKey];
+  const selection = stored && typeof stored === 'object' ? stored as { targetDate?: unknown; uploadMode?: unknown } : null;
+  const storedTargetDate = selection?.targetDate ?? stored;
 
   return {
     targetDate: isValidAbrsLedgerTargetDate(storedTargetDate)
       ? storedTargetDate
       : fallbackDate,
+    uploadMode: selection?.uploadMode === 'daily' ? 'daily' : 'monthly',
   };
 }
 
 async function setStoredAbrsLedgerTargetDate(
   targetDate: string,
+  uploadMode?: 'daily' | 'monthly',
 ): Promise<RuntimeMessageMap['abrs/save-ledger-target-date']['response']> {
   if (!isValidAbrsLedgerTargetDate(targetDate)) {
     throw new Error('장부 날짜 형식이 올바르지 않습니다.');
@@ -287,10 +343,10 @@ async function setStoredAbrsLedgerTargetDate(
 
   await chrome.storage.local.set({
     [await scopedStorageKey(ABRS_LEDGER_SELECTED_TARGET_DATE_STORAGE_KEY)]:
-      targetDate,
+      { targetDate, uploadMode: uploadMode === 'daily' ? 'daily' : 'monthly' },
   });
 
-  return { targetDate };
+  return { targetDate, uploadMode: uploadMode === 'daily' ? 'daily' : 'monthly' };
 }
 
 function createEmptyAbrsLedgerBatch(targetDate: string): AbrsLedgerBatch {
@@ -304,15 +360,22 @@ function createEmptyAbrsLedgerBatch(targetDate: string): AbrsLedgerBatch {
 function normalizeAbrsLedgerBatch(
   targetDate: string,
   value: unknown,
+  period?: Pick<AbrsLedgerPeriodRequest, 'periodStart' | 'periodEnd'>,
 ): AbrsLedgerBatch {
   if (!value || typeof value !== 'object') {
-    return createEmptyAbrsLedgerBatch(targetDate);
+    return {
+      ...createEmptyAbrsLedgerBatch(targetDate),
+      periodStart: period?.periodStart,
+      periodEnd: period?.periodEnd,
+    };
   }
 
   const candidate = value as Partial<AbrsLedgerBatch>;
 
   return {
     targetDate,
+    periodStart: period?.periodStart,
+    periodEnd: period?.periodEnd,
     updatedAt:
       typeof candidate.updatedAt === 'string' ? candidate.updatedAt : null,
     entries: Array.isArray(candidate.entries) ? candidate.entries : [],
@@ -322,14 +385,25 @@ function normalizeAbrsLedgerBatch(
 async function getStoredAbrsLedgerBatch(
   targetDate: string,
   key?: string,
+  period?: Pick<AbrsLedgerPeriodRequest, 'periodStart' | 'periodEnd'>,
 ): Promise<AbrsLedgerBatch> {
-  const storageKey = key ?? (await createAbrsLedgerBatchStorageKey(targetDate));
+  const storageKey =
+    key ?? (await createAbrsLedgerBatchStorageKey(targetDate, period));
+  const cachedValue = await getAbrsLedgerBatchValue(storageKey);
+  if (cachedValue) {
+    return normalizeAbrsLedgerBatch(targetDate, cachedValue, period);
+  }
   const result = (await chrome.storage.local.get([storageKey])) as Record<
     string,
     unknown
   >;
 
-  return normalizeAbrsLedgerBatch(targetDate, result[storageKey]);
+  const batch = normalizeAbrsLedgerBatch(targetDate, result[storageKey], period);
+  if (result[storageKey]) {
+    await setAbrsLedgerBatchValue(storageKey, batch);
+    await chrome.storage.local.remove(storageKey);
+  }
+  return batch;
 }
 
 async function setStoredAbrsLedgerBatch(
@@ -341,69 +415,58 @@ async function setStoredAbrsLedgerBatch(
     updatedAt: new Date().toISOString(),
   };
 
-  await chrome.storage.local.set({
-    [key ?? (await createAbrsLedgerBatchStorageKey(batch.targetDate))]:
-      nextBatch,
-  });
+  await setAbrsLedgerBatchValue(
+    key ?? (await createAbrsLedgerBatchStorageKey(batch.targetDate, batch)),
+    nextBatch,
+  );
 
   return nextBatch;
 }
-
-function upsertPersistedEntries(
-  existingEntries: AbrsLedgerPersistedEntry[],
-  incomingEntries: AbrsLedgerPersistedEntry[],
-): AbrsLedgerPersistedEntry[] {
-  return incomingEntries.reduce<AbrsLedgerPersistedEntry[]>(
-    (entries, entry) => {
-      const existingIndex = entries.findIndex(
-        (candidate) => candidate.slot === entry.slot,
-      );
-
-      if (existingIndex >= 0) {
-        const nextEntries = [...entries];
-        nextEntries[existingIndex] = entry;
-        return nextEntries;
-      }
-
-      return [...entries, entry];
-    },
-    [...existingEntries],
-  );
-}
-
 async function handleGetAbrsLedgerBatch(
   payload: RuntimeMessageMap['abrs/get-ledger-batch']['request'],
 ): Promise<RuntimeMessageMap['abrs/get-ledger-batch']['response']> {
-  return getStoredAbrsLedgerBatch(payload.targetDate);
+  const storageKey = await createAbrsLedgerBatchStorageKey(payload.targetDate, payload);
+  return serializeAbrsLedgerBatchOperation(storageKey,
+    () => getStoredAbrsLedgerBatch(payload.targetDate, storageKey, payload));
 }
 
 async function handleSaveAbrsLedgerBatchFiles(
   payload: RuntimeMessageMap['abrs/save-ledger-batch-files']['request'],
 ): Promise<RuntimeMessageMap['abrs/save-ledger-batch-files']['response']> {
-  const storageKey = await createAbrsLedgerBatchStorageKey(payload.targetDate);
-  const currentBatch = await getStoredAbrsLedgerBatch(
-    payload.targetDate,
-    storageKey,
-  );
-
-  return setStoredAbrsLedgerBatch(
-    {
+  const storageKey = await createAbrsLedgerBatchStorageKey(payload.targetDate, payload);
+  return serializeAbrsLedgerBatchOperation(storageKey, async () => {
+    const currentBatch = await getStoredAbrsLedgerBatch(payload.targetDate, storageKey, payload);
+    return setStoredAbrsLedgerBatch({
       targetDate: payload.targetDate,
+      periodStart: payload.periodStart,
+      periodEnd: payload.periodEnd,
       updatedAt: currentBatch.updatedAt,
-      entries: upsertPersistedEntries(currentBatch.entries, payload.entries),
-    },
-    storageKey,
-  );
+      entries: upsertAbrsLedgerPersistedEntries(
+        filterAbrsLedgerEntriesForReplacement(currentBatch.entries, payload.entries, payload.replaceSlots), payload.entries,
+      ),
+    }, storageKey);
+  });
 }
 
 async function handleClearAbrsLedgerBatch(
   payload: RuntimeMessageMap['abrs/clear-ledger-batch']['request'],
 ): Promise<RuntimeMessageMap['abrs/clear-ledger-batch']['response']> {
-  await chrome.storage.local.remove(
-    await createAbrsLedgerBatchStorageKey(payload.targetDate),
-  );
-
-  return createEmptyAbrsLedgerBatch(payload.targetDate);
+  const logicalKey = createAbrsLedgerBatchKey(payload.targetDate, payload);
+  const storageKey = await scopedStorageKey(logicalKey, payload.expectedAccountScope);
+  return serializeAbrsLedgerBatchOperation(storageKey, async () => {
+    if (await scopedStorageKey(logicalKey, payload.expectedAccountScope) !== storageKey) {
+      throw new Error('계정이 변경되어 이전 작업의 파일 정리를 중단했습니다.');
+    }
+    if (payload.expectedOriginals !== undefined) {
+      const currentBatch = await getStoredAbrsLedgerBatch(payload.targetDate, storageKey, payload);
+      const entries = await retainUnacknowledgedAbrsLedgerEntries(currentBatch.entries, payload.expectedOriginals);
+      if (entries.length === currentBatch.entries.length) return currentBatch;
+      if (entries.length > 0) return setStoredAbrsLedgerBatch({ ...currentBatch, entries }, storageKey);
+    }
+    await removeAccountScopedValue(logicalKey, removeAbrsLedgerBatchValue, payload.expectedAccountScope);
+    return { ...createEmptyAbrsLedgerBatch(payload.targetDate),
+      periodStart: payload.periodStart, periodEnd: payload.periodEnd };
+  });
 }
 
 function getTabUrl(tab: chrome.tabs.Tab): URL | null {
@@ -471,6 +534,10 @@ function getCoupangAuthRedirectUrl(tab: chrome.tabs.Tab): URL | null {
   }
 }
 
+function isAbrsAdsSlot(slot: AbrsCoupangLedgerDownloadSlot): boolean {
+  return slot === 'dailySettlement' || slot === 'adPerformance';
+}
+
 function isCoupangAuthTabForSlot(
   tab: chrome.tabs.Tab,
   slot: AbrsCoupangLedgerDownloadSlot,
@@ -483,7 +550,7 @@ function isCoupangAuthTabForSlot(
 
   const redirectHostname = redirectUrl.hostname.toLowerCase();
 
-  return slot === 'dailySettlement'
+  return isAbrsAdsSlot(slot)
     ? redirectHostname === 'advertising.coupang.com' ||
         redirectHostname === 'ads.coupang.com'
     : redirectHostname === 'wing.coupang.com';
@@ -493,7 +560,7 @@ function isTabUsableForAbrsSlot(
   tab: chrome.tabs.Tab,
   slot: AbrsCoupangLedgerDownloadSlot,
 ): boolean {
-  if (slot === 'dailySettlement' ? isAdsDataTab(tab) : isWingTab(tab)) {
+  if (isAbrsAdsSlot(slot) ? isAdsDataTab(tab) : isWingTab(tab)) {
     return true;
   }
 
@@ -501,7 +568,7 @@ function isTabUsableForAbrsSlot(
 }
 
 function getAbrsSlotStartUrl(slot: AbrsCoupangLedgerDownloadSlot): string {
-  if (slot === 'dailySettlement') {
+  if (isAbrsAdsSlot(slot)) {
     return ADS_LEDGER_START_URL;
   }
 
@@ -523,9 +590,10 @@ function safeDownloadFileName(fileName: string): string {
 async function handleDownloadCachedAbrsLedgerFile(
   payload: RuntimeMessageMap['abrs/download-cached-ledger-file']['request'],
 ): Promise<RuntimeMessageMap['abrs/download-cached-ledger-file']['response']> {
-  const batch = await getStoredAbrsLedgerBatch(payload.targetDate);
+  const batch = await handleGetAbrsLedgerBatch(payload);
   const entry = batch.entries.find(
-    (candidate) => candidate.slot === payload.slot,
+    (candidate) => candidate.slot === payload.slot &&
+      (!payload.fileName || candidate.fileName === payload.fileName),
   );
 
   if (!entry) {
@@ -534,7 +602,7 @@ async function handleDownloadCachedAbrsLedgerFile(
 
   const fileName = safeDownloadFileName(entry.fileName);
   const downloadId = await chrome.downloads.download({
-    url: `data:${entry.mimeType};base64,${entry.base64}`,
+    url: createAbrsLedgerCachedDownloadUrl(entry),
     filename: fileName,
     conflictAction: 'uniquify',
     saveAs: false,
@@ -717,7 +785,7 @@ async function resolveCoupangAuthRedirect(
     return tab;
   }
 
-  if (slot === 'dailySettlement' && isAdsLoginTab(tab)) {
+  if (isAbrsAdsSlot(slot) && isAdsLoginTab(tab)) {
     const clicked = await clickCoupangAuthLoginButton(tab.id);
 
     if (!clicked) {
@@ -787,7 +855,7 @@ async function assertAbrsTabReadyForSlot(
 
   const stableTab = await waitForStableAbrsTab(tab.id);
 
-  if (slot === 'dailySettlement' && isAdsLoginTab(stableTab)) {
+  if (isAbrsAdsSlot(slot) && isAdsLoginTab(stableTab)) {
     throw new Error(COUPANG_ADS_LOGIN_REQUIRED_MESSAGE);
   }
 
@@ -799,15 +867,16 @@ async function assertAbrsTabReadyForSlot(
 }
 
 async function downloadAbrsLedgerSlot(
-  slot: AbrsCoupangLedgerDownloadSlot,
-  targetDate: string,
+  request: AbrsCoupangLedgerDownloadRequest,
 ): Promise<{
-  download: AbrsCoupangLedgerDownload | null;
+  downloads: AbrsCoupangLedgerDownload[];
   status: AbrsLedgerDownloadSlotStatus;
 }> {
+  const { slot } = request;
   let tab: chrome.tabs.Tab | null = null;
 
   try {
+    resolveAbrsLedgerPeriod(request);
     tab = await getOrOpenAbrsTabForSlot(slot);
 
     if (!tab.id) {
@@ -820,23 +889,36 @@ async function downloadAbrsLedgerSlot(
       throw new Error('Coupang 탭 ID를 찾지 못했습니다.');
     }
 
-    const download = await sendTabMessageWithRecovery(tab.id, {
+    const response = await sendTabMessageWithRecovery(tab.id, {
       type: 'abrs/download-ledger-file',
-      payload: { slot, targetDate },
+      payload: request,
     });
+    const downloads = normalizeAbrsCoupangDownloads(response);
+    if (downloads.length === 0) {
+      throw new Error('선택한 기간에 다운로드할 파일이 없습니다.');
+    }
+    if (
+      downloads.some(
+        (download) => download.slot !== slot || !isAbrsLedgerXlsxPayload(download),
+      )
+    ) {
+      throw new Error('Coupang에서 받은 파일의 유형 또는 내용이 올바르지 않습니다.');
+    }
 
     return {
-      download,
+      downloads,
       status: {
         slot,
         status: 'downloaded',
-        fileName: download.fileName,
+        fileName: downloads[0].fileName,
+        fileNames: downloads.map((download) => download.fileName),
+        fileCount: downloads.length,
         tabUrl: tab.url,
       },
     };
   } catch (error) {
     return {
-      download: null,
+      downloads: [],
       status: {
         slot,
         status: 'failed',
@@ -853,54 +935,44 @@ async function downloadAbrsLedgerSlot(
 async function handleDownloadAllAbrsLedgerFiles(
   payload: RuntimeMessageMap['abrs/download-all-ledger-files']['request'],
 ): Promise<RuntimeMessageMap['abrs/download-all-ledger-files']['response']> {
-  const storageKey = await createAbrsLedgerBatchStorageKey(payload.targetDate);
-  const currentBatch = await getStoredAbrsLedgerBatch(
-    payload.targetDate,
-    storageKey,
-  );
-  const downloads: AbrsCoupangLedgerDownload[] = [];
+  const storageKey = await createAbrsLedgerBatchStorageKey(payload.targetDate, payload);
+  let batch = await serializeAbrsLedgerBatchOperation(storageKey,
+    () => getStoredAbrsLedgerBatch(payload.targetDate, storageKey, payload));
+  const { sellerId } = await handleGetWingSeller();
+  resolveAbrsLedgerSellerId(batch.entries, sellerId);
   const statuses: AbrsLedgerDownloadSlotStatus[] = [];
 
-  for (const slot of ABRS_LEDGER_DOWNLOAD_SLOTS) {
-    const result = await downloadAbrsLedgerSlot(slot, payload.targetDate);
-
+  for (const slot of getAbrsRequiredLedgerSlots(resolveAbrsLedgerPeriod(payload))) {
+    const result = await downloadAbrsLedgerSlot({ ...payload, slot, expectedSellerId: sellerId });
     statuses.push(result.status);
 
-    if (result.download) {
-      downloads.push(result.download);
+    if (result.downloads.length > 0) {
+      batch = await serializeAbrsLedgerBatchOperation(storageKey, async () => {
+        const currentBatch = await getStoredAbrsLedgerBatch(payload.targetDate, storageKey, payload);
+        resolveAbrsLedgerSellerId([...currentBatch.entries, ...result.downloads], sellerId);
+        return setStoredAbrsLedgerBatch({ ...currentBatch,
+          entries: upsertAbrsLedgerPersistedDownloads({
+            existingEntries: currentBatch.entries.filter((entry) => entry.slot !== slot), downloads: result.downloads,
+          }),
+        }, storageKey);
+      });
     }
   }
 
-  const entries = upsertAbrsLedgerPersistedDownloads({
-    existingEntries: currentBatch.entries,
-    downloads,
-  });
-  const batch =
-    downloads.length > 0
-      ? await setStoredAbrsLedgerBatch(
-          {
-            targetDate: payload.targetDate,
-            updatedAt: currentBatch.updatedAt,
-            entries,
-          },
-          storageKey,
-        )
-      : currentBatch;
-
-  return {
-    batch,
-    statuses,
-  };
+  return { batch, statuses };
 }
 
 async function handleRuntimeMessage(
   message: RuntimeMessage,
+  sender: chrome.runtime.MessageSender,
 ): Promise<
   | RuntimeMessageMap['system/get-extension-context']['response']
   | RuntimeMessageMap['page/get-active-tab-popular-search-data']['response']
   | RuntimeMessageMap['page/set-active-tab-overlay']['response']
   | RuntimeMessageMap['abrs/get-active-tab-coupang-page']['response']
+  | RuntimeMessageMap['abrs/get-wing-seller']['response']
   | RuntimeMessageMap['abrs/download-active-tab-ledger-file']['response']
+  | RuntimeMessageMap['abrs/download-coupang-original']['response']
   | RuntimeMessageMap['abrs/get-ledger-batch']['response']
   | RuntimeMessageMap['abrs/save-ledger-batch-files']['response']
   | RuntimeMessageMap['abrs/clear-ledger-batch']['response']
@@ -910,6 +982,11 @@ async function handleRuntimeMessage(
   | RuntimeMessageMap['abrs/save-ledger-target-date']['response']
 > {
   switch (message.type) {
+    case 'abrs/download-coupang-original': {
+      const payload = (message as RuntimeMessage<'abrs/download-coupang-original'>).payload;
+      validateAbrsCoupangOriginalRequest(payload, sender, chrome.runtime.id);
+      return downloadAbrsCoupangOriginal(payload);
+    }
     case 'system/get-extension-context':
       return handleGetExtensionContext();
 
@@ -928,6 +1005,9 @@ async function handleRuntimeMessage(
 
     case 'abrs/get-active-tab-coupang-page':
       return handleGetActiveTabAbrsCoupangPage();
+
+    case 'abrs/get-wing-seller':
+      return handleGetWingSeller();
 
     case 'abrs/download-active-tab-ledger-file':
       if (!message.payload) {
@@ -1006,6 +1086,7 @@ async function handleRuntimeMessage(
       return setStoredAbrsLedgerTargetDate(
         (message as RuntimeMessage<'abrs/save-ledger-target-date'>).payload
           .targetDate,
+        (message as RuntimeMessage<'abrs/save-ledger-target-date'>).payload.uploadMode,
       );
 
     default:
@@ -1014,8 +1095,8 @@ async function handleRuntimeMessage(
 }
 
 export function registerRuntimeMessageListener(): void {
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    void handleRuntimeMessage(message as RuntimeMessage)
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    void handleRuntimeMessage(message as RuntimeMessage, sender)
       .then((response) => {
         sendResponse(messageSuccess(response));
       })

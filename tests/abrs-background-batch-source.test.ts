@@ -42,14 +42,14 @@ test('background runtime persists ABRS batches and queries non-active Coupang ta
   assert.match(router, /handleDownloadAllAbrsLedgerFiles/);
   assert.match(
     router,
-    /const ABRS_LEDGER_DOWNLOAD_SLOTS:[\s\S]*'inventoryHealth',[\s\S]*'salesStatistics',[\s\S]*'dailySettlement',[\s\S]*'productList'/,
+    /const ABRS_LEDGER_DOWNLOAD_SLOTS:[\s\S]*'inventoryHealth',[\s\S]*'salesStatistics',[\s\S]*'adPerformance',[\s\S]*'productList'[\s\S]*'CATEGORY_TR'[\s\S]*'PPIR'/,
   );
   assert.match(router, /abrs\/download-all-ledger-files/);
   assert.match(router, /chrome\.downloads\.download/);
   assert.match(router, /handleDownloadCachedAbrsLedgerFile/);
   assert.match(
     router,
-    /handleDownloadActiveTabAbrsLedgerFile[\s\S]*downloadAbrsLedgerSlot\(payload\.slot, payload\.targetDate\)/,
+    /handleDownloadActiveTabAbrsLedgerFile[\s\S]*downloadAbrsLedgerSlot\(payload\)/,
   );
   assert.doesNotMatch(router, /fallbackTab[\s\S]*sendTabMessage\(fallbackTab\.id/);
   assert.match(rowDownload, /chrome\.tabs\.query/);
@@ -119,6 +119,6 @@ test('background runtime starts Coupang ads downloads from dashboard without ste
   assert.match(router, /COUPANG_ADS_LOGIN_REQUIRED_MESSAGE/);
   assert.match(
     router,
-    /slot === 'dailySettlement' && isAdsLoginTab\(stableTab\)/,
+    /isAbrsAdsSlot\(slot\) && isAdsLoginTab\(stableTab\)/,
   );
 });

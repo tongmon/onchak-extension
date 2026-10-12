@@ -19,7 +19,7 @@ let data: Record<string, any> = {};
 };
 const { authenticatedFetch, validateStoredSession, SessionExpiredError } =
   await import("../src/entities/auth/api/session-client.ts");
-const { scopedStorageKey, initializeLegacyScope } =
+const { accountScope, scopedStorageKey, initializeLegacyScope, removeAccountScopedValue } =
   await import("../src/shared/extension/storage/account-scope.ts");
 const { login, MfaChallengeRequired, completeMfaLogin } =
   await import("../src/entities/auth/api/auth-client.ts");
@@ -98,6 +98,64 @@ test("draft keys are scoped by account and origin; legacy data is claimed by its
   assert.equal(data[b], undefined);
   data.authSession = { ...session };
   assert.equal(await scopedStorageKey("draft"), a);
+});
+test("an upload receipt finishing after an account switch cannot evict the new account's batch", async () => {
+  const key = "abrsLedgerBatch:2026-09-01~2026-09-30";
+  const owner = accountScope(data)!;
+  const ownerKey = await scopedStorageKey(key);
+  data.authSession = { ...session, accessToken: "account-b", user: { email: "b@example.com" } };
+  const nextAccountKey = await scopedStorageKey(key);
+  data[ownerKey] = { original: "account-a" };
+  data[nextAccountKey] = { original: "account-b" };
+  const originals = new Map([[ownerKey, "account-a"], [nextAccountKey, "account-b"]]);
+  const removed: string[] = [];
+  await assert.rejects(removeAccountScopedValue(key, async (scopedKey) => {
+    removed.push(scopedKey);
+    originals.delete(scopedKey);
+  }, owner), /계정이 변경/);
+  assert.deepEqual(removed, []);
+  assert.equal(originals.get(ownerKey), "account-a");
+  assert.equal(originals.get(nextAccountKey), "account-b");
+  assert.deepEqual(data[nextAccountKey], { original: "account-b" });
+});
+test("cleanup keeps the captured batch key when an account switch happens during eviction", async () => {
+  const key = "abrsLedgerBatch:2026-09-01~2026-09-30";
+  const owner = accountScope(data)!;
+  const ownerKey = await scopedStorageKey(key);
+  data.authSession = { ...session, user: { email: "b@example.com" } };
+  const nextAccountKey = await scopedStorageKey(key);
+  data.authSession = { ...session };
+  data[ownerKey] = { original: "account-a" };
+  data[nextAccountKey] = { original: "account-b" };
+  const originals = new Map([[ownerKey, "account-a"], [nextAccountKey, "account-b"]]);
+  await removeAccountScopedValue(key, async (scopedKey) => {
+    assert.equal(scopedKey, ownerKey);
+    data.authSession = { ...session, user: { email: "b@example.com" } };
+    originals.delete(scopedKey);
+  }, owner);
+  assert.equal(originals.has(ownerKey), false);
+  assert.equal(data[ownerKey], undefined);
+  assert.equal(originals.get(nextAccountKey), "account-b");
+  assert.deepEqual(data[nextAccountKey], { original: "account-b" });
+});
+test("upload receipt lookup rejects a replacement account before reading its receipt", async () => {
+  const key = "abrsReceipt:2026-09-30:2026-09-01:2026-09-30";
+  const owner = accountScope(data)!;
+  const ownerKey = await scopedStorageKey(key, owner);
+  data[ownerKey] = { importId: "account-a-receipt" };
+  data.authSession = { ...session, accessToken: "account-b", user: { email: "b@example.com" } };
+  const nextAccountKey = await scopedStorageKey(key);
+  data[nextAccountKey] = { importId: "account-b-receipt" };
+  await assert.rejects(scopedStorageKey(key, owner), /계정이 변경/);
+  assert.deepEqual(data[ownerKey], { importId: "account-a-receipt" });
+  assert.deepEqual(data[nextAccountKey], { importId: "account-b-receipt" });
+});
+test("a delayed upload workflow lookup never runs under a replacement account token", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; return Response.json({}); };
+  data.authSession = { ...session, accessToken: "account-b", user: { email: "b@example.com" } };
+  await assert.rejects(authenticatedFetch("/api/ledger/imports/account-a-receipt/workflow", {}, 30000, session.accessToken), SessionExpiredError);
+  assert.equal(calls, 0);
 });
 test("MFA challenge is not a session and verification consumes the challenge token", async () => {
   const responses = [

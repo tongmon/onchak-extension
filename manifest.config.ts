@@ -30,6 +30,7 @@ export default defineManifest({
     "https://zephlyglobal.com/*",
     "https://wing.coupang.com/*",
     "https://advertising.coupang.com/*",
+    "https://rfm-common-prod.s3.ap-northeast-2.amazonaws.com/*",
   ],
   background: {
     service_worker: "src/app/entrypoints/background/index.ts",

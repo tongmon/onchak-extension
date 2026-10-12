@@ -46,30 +46,78 @@ export interface AbrsCoupangPageSnapshot {
   href: string;
   title: string;
   surface: AbrsCoupangSurface;
+  sellerId?: string;
 }
 
 export type AbrsCoupangLedgerDownloadSlot =
   | 'inventoryHealth'
   | 'salesStatistics'
+  | 'adPerformance'
   | 'dailySettlement'
-  | 'productList';
+  | 'productList'
+  | 'CATEGORY_TR'
+  | 'WAREHOUSING_SHIPPING'
+  | 'STORAGE_FEE'
+  | 'CRETURN_PICKUP_RESTOCKING'
+  | 'VRETURN_HANDLING'
+  | 'VRETURN_SHIPPING'
+  | 'INVENTORY_COMPENSATION'
+  | 'VALUE_ADDED_SERVICE_FEE'
+  | 'PPIR';
 
 export type AbrsLedgerFileSlot = AbrsCoupangLedgerDownloadSlot | 'productList';
 
 export type AbrsLedgerSourceType =
   | 'COUPANG_INVENTORY_HEALTH'
   | 'COUPANG_SALES_STATISTICS'
+  | 'COUPANG_AD_PERFORMANCE'
   | 'COUPANG_DAILY_SETTLEMENT'
-  | 'COUPANG_PRICE_INVENTORY';
+  | 'COUPANG_PRICE_INVENTORY'
+  | 'COUPANG_CATEGORY_TRANSACTION'
+  | 'COUPANG_WAREHOUSING_SHIPPING'
+  | 'COUPANG_STORAGE_FEE'
+  | 'COUPANG_CUSTOMER_RETURN'
+  | 'COUPANG_VENDOR_RETURN_HANDLING'
+  | 'COUPANG_VENDOR_RETURN_SHIPPING'
+  | 'COUPANG_INVENTORY_COMPENSATION'
+  | 'COUPANG_VALUE_ADDED_SERVICE_FEE'
+  | 'COUPANG_PPIR';
 
 export interface AbrsLedgerDateRange {
   start: string;
   end: string;
 }
 
-export interface AbrsCoupangLedgerDownloadRequest {
-  slot: AbrsCoupangLedgerDownloadSlot;
+export interface AbrsLedgerPeriodRequest {
   targetDate: string;
+  periodStart?: string;
+  periodEnd?: string;
+}
+
+export interface AbrsCoupangLedgerDownloadRequest extends AbrsLedgerPeriodRequest {
+  slot: AbrsCoupangLedgerDownloadSlot;
+  expectedSellerId?: string;
+}
+
+export function resolveAbrsLedgerPeriod(
+  request: AbrsLedgerPeriodRequest,
+): AbrsLedgerDateRange {
+  const start = request.periodStart ?? request.targetDate;
+  const end = request.periodEnd ?? request.targetDate;
+  for (const value of [request.targetDate, start, end]) {
+    const parsed = new Date(`${value}T00:00:00Z`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== value
+    ) {
+      throw new Error('장부 날짜 형식이 올바르지 않습니다.');
+    }
+  }
+  if (start > end) {
+    throw new Error('조회 시작일은 종료일보다 늦을 수 없습니다.');
+  }
+  return { start, end };
 }
 
 export interface AbrsCoupangLedgerDownload {
@@ -77,6 +125,23 @@ export interface AbrsCoupangLedgerDownload {
   fileName: string;
   mimeType: string;
   base64: string;
+  sourcePeriod?: AbrsLedgerDateRange;
+  sellerId?: string;
+}
+
+export interface AbrsCoupangOriginalDownloadRequest {
+  slot: AbrsCoupangLedgerDownloadSlot;
+  url: string;
+}
+
+export type AbrsCoupangLedgerDownloadResult =
+  | AbrsCoupangLedgerDownload
+  | AbrsCoupangLedgerDownload[];
+
+export function normalizeAbrsCoupangDownloads(
+  result: AbrsCoupangLedgerDownloadResult,
+): AbrsCoupangLedgerDownload[] {
+  return Array.isArray(result) ? result : [result];
 }
 
 export interface AbrsLedgerPersistedEntry {
@@ -89,24 +154,39 @@ export interface AbrsLedgerPersistedEntry {
   base64: string;
   size: number;
   savedAt: string;
+  collectionVersion?: number;
+  sellerId?: string;
 }
 
 export interface AbrsLedgerBatch {
   targetDate: string;
+  periodStart?: string;
+  periodEnd?: string;
   updatedAt: string | null;
   entries: AbrsLedgerPersistedEntry[];
+}
+
+export interface AbrsLedgerOriginalSignature {
+  slot: AbrsLedgerFileSlot;
+  canonicalFileName: string;
+  contentSha256: string;
+  dateRange: AbrsLedgerDateRange | null;
+  sellerId?: string;
 }
 
 export interface AbrsLedgerDownloadSlotStatus {
   slot: AbrsCoupangLedgerDownloadSlot;
   status: 'downloaded' | 'failed';
   fileName?: string;
+  fileNames?: string[];
+  fileCount?: number;
   error?: string;
   tabUrl?: string;
 }
 
 export interface AbrsLedgerSelectedTargetDate {
   targetDate: string;
+  uploadMode?: 'daily' | 'monthly';
 }
 
 export interface RuntimeMessageMap {
@@ -130,36 +210,47 @@ export interface RuntimeMessageMap {
     request: undefined;
     response: AbrsCoupangPageSnapshot;
   };
+  'abrs/get-wing-seller': {
+    request: undefined;
+    response: { sellerId: string };
+  };
   'abrs/download-active-tab-ledger-file': {
     request: AbrsCoupangLedgerDownloadRequest;
+    response: AbrsCoupangLedgerDownloadResult;
+  };
+  'abrs/download-coupang-original': {
+    request: AbrsCoupangOriginalDownloadRequest;
     response: AbrsCoupangLedgerDownload;
   };
   'abrs/get-ledger-batch': {
-    request: { targetDate: string };
+    request: AbrsLedgerPeriodRequest;
     response: AbrsLedgerBatch;
   };
   'abrs/save-ledger-batch-files': {
-    request: {
-      targetDate: string;
+    request: AbrsLedgerPeriodRequest & {
       entries: AbrsLedgerPersistedEntry[];
+      replaceSlots?: AbrsCoupangLedgerDownloadSlot[];
     };
     response: AbrsLedgerBatch;
   };
   'abrs/clear-ledger-batch': {
-    request: { targetDate: string };
+    request: AbrsLedgerPeriodRequest & {
+      expectedAccountScope?: string;
+      expectedOriginals?: AbrsLedgerOriginalSignature[];
+    };
     response: AbrsLedgerBatch;
   };
   'abrs/download-all-ledger-files': {
-    request: { targetDate: string };
+    request: AbrsLedgerPeriodRequest;
     response: {
       batch: AbrsLedgerBatch;
       statuses: AbrsLedgerDownloadSlotStatus[];
     };
   };
   'abrs/download-cached-ledger-file': {
-    request: {
-      targetDate: string;
+    request: AbrsLedgerPeriodRequest & {
       slot: AbrsLedgerFileSlot;
+      fileName?: string;
     };
     response: {
       downloadId: number;
@@ -171,7 +262,7 @@ export interface RuntimeMessageMap {
     response: AbrsLedgerSelectedTargetDate;
   };
   'abrs/save-ledger-target-date': {
-    request: { targetDate: string };
+    request: AbrsLedgerSelectedTargetDate;
     response: AbrsLedgerSelectedTargetDate;
   };
 }
@@ -201,7 +292,7 @@ export interface TabMessageMap {
   };
   'abrs/download-ledger-file': {
     request: AbrsCoupangLedgerDownloadRequest;
-    response: AbrsCoupangLedgerDownload;
+    response: AbrsCoupangLedgerDownloadResult;
   };
 }
 
